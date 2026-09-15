@@ -2,7 +2,36 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../app/lib/supabase";
+const formatTimestamp = (timestamp: string) => {
+  if (!timestamp) return "N/A";
+  const date = new Date(timestamp);
+  return date.toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
 
+const formatRelativeTime = (timestamp: string) => {
+  if (!timestamp) return "N/A";
+  const now = new Date();
+  const target = new Date(timestamp);
+  const diffMs = target.getTime() - now.getTime();
+  const diffMins = Math.round(diffMs / 60000);
+  const diffHours = Math.round(diffMs / 3600000);
+
+  if (Math.abs(diffMins) < 60) {
+    return diffMins > 0 ? `in ${diffMins}m` : `${Math.abs(diffMins)}m ago`;
+  }
+  if (Math.abs(diffHours) < 24) {
+    return diffHours > 0 ? `in ${diffHours}h` : `${Math.abs(diffHours)}h ago`;
+  }
+  const diffDays = Math.round(diffHours / 24);
+  return diffDays > 0 ? `in ${diffDays}d` : `${Math.abs(diffDays)}d ago`;
+};
 type UserTask = {
   id: string;
   user_name: string;
@@ -96,10 +125,14 @@ export default function TaskDashboard({ userName, userRole }: Props) {
               </span>
             </div>
 
-            <div className="flex justify-between mt-1 text-[9px] text-slate-400">
-              <span>Assigned by: {task.assigned_by}</span>
-              <span className="text-cyan-400">{task.status}</span>
-            </div>
+  <div className="flex justify-between mt-1 text-[9px] text-slate-400">
+  <span>Assigned by: {task.assigned_by}</span>
+  <span className="text-cyan-400">{task.status}</span>
+</div>
+
+<div className="mt-0.5 text-[8px] text-slate-500">
+  🕐 {formatTimestamp(task.assigned_at)}
+</div>
 
             {expandedTaskId === task.id && task.trip_details && (
               <div className="mt-2 pt-2 border-t border-slate-800 space-y-1 text-[9px]">
