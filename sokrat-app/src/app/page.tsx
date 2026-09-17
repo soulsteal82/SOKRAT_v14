@@ -5,7 +5,8 @@ import dynamic from 'next/dynamic';
 
 // Import Leaflet CSS directly in the component
 import 'leaflet/dist/leaflet.css';
-import TaskDashboard from "@/components/TaskDashboard";
+import TaskDashboard, { SelectedTaskData } from "@/components/TaskDashboard";
+import { supabase } from "../app/lib/supabase";
 // Dynamically import Leaflet components to avoid SSR issues
 const MapContainer = dynamic(
   () => import('react-leaflet').then((mod) => mod.MapContainer),
@@ -205,6 +206,7 @@ const fileToBase64 = (file: File): Promise<string> => {
 export default function Home() {
   const [profile, setProfile] = useState<"DISPATCHER" | "DRIVER" | "INSPECTOR">("DISPATCHER");
   const [showGlobalMap, setShowGlobalMap] = useState(false);
+  const [selectedTask, setSelectedTask] = useState<SelectedTaskData | null>(null);
   const [currentPathIndex, setCurrentPathIndex] = useState(0);
   const [checkedEPD, setCheckedEPD] = useState(false);
   const [checkedMixDesign, setCheckedMixDesign] = useState(false);
@@ -356,6 +358,60 @@ export default function Home() {
 
   const currentAsset = assets.find(a => a.id === activeAssetId) || assets[0];
   const ledgerEndRef = useRef<HTMLDivElement | null>(null);
+
+  // ============================================
+  // PHASE 2: Load assets (panels) from Supabase for a task
+  // ============================================
+  const loadAssetsForTask = async (manifestGroupId: string) => {
+    const { data, error } = await supabase
+      .from("assets")
+      .select("*")
+      .eq("manifest_group_id", manifestGroupId)
+      .order("asset_serial", { ascending: true });
+
+    if (error || !data) return;
+
+    // Map Supabase assets to the app's Asset type
+    const loadedAssets: Asset[] = data.map((a: any) => ({
+      id: a.asset_serial,
+      state: a.state || "INITIALIZED",
+      epd1_certificate_url: a.epd1_certificate_url,
+      mix1_certificate_url: a.mix1_certificate_url,
+      epd2_certificate_url: a.epd2_certificate_url,
+      mix2_certificate_url: a.mix2_certificate_url,
+      epd1_file_name: a.epd1_file_name,
+      mix1_file_name: a.mix1_file_name,
+      epd2_file_name: a.epd2_file_name,
+      mix2_file_name: a.mix2_file_name,
+      factory_qa_status: a.factory_qa_status,
+      factory_qa_defect_reason: a.factory_qa_defect_reason,
+      site_rejection_reason: a.site_rejection_reason,
+      factory_delay_minutes: a.factory_delay_minutes || 0,
+      transit_delay_minutes: a.transit_delay_minutes || 0,
+      site_delay_minutes: a.site_delay_minutes || 0,
+      delay_reason: a.delay_reason,
+      installed_timestamp: a.installed_timestamp,
+      installed_location: a.installed_location,
+      manifest_group_id: a.manifest_group_id,
+      previous_state_before_rejection: a.previous_state_before_rejection,
+      metadata: a.metadata || null,
+      custodyHistory: a.custody_history || [],
+      hasScannedQR: a.has_scanned_qr || false,
+      rejection_photos: a.rejection_photos || [],
+      loading_started_timestamp: a.loading_started_timestamp,
+      loading_completed_timestamp: a.loading_completed_timestamp,
+      offloading_started_timestamp: a.offloading_started_timestamp,
+      offloading_completed_timestamp: a.offloading_completed_timestamp,
+      installation_started_timestamp: a.installation_started_timestamp,
+      installation_completed_timestamp: a.installation_completed_timestamp,
+    }));
+
+    if (loadedAssets.length > 0) {
+      setAssets(loadedAssets);
+      setActiveAssetId(loadedAssets[0].id);
+    }
+  };
+
 
   // Check if trip is complete based on scope
   const isTripComplete = () => {
@@ -715,6 +771,13 @@ export default function Home() {
         mix2_file_name: null
       }))
     );
+        // Save to Supabase
+    saveTaskState({
+      epd1_url: null,
+      mix1_url: null,
+      epd2_url: null,
+      mix2_url: null,
+    });
     setError(null);
   };
 
@@ -731,6 +794,10 @@ export default function Home() {
         delivery_note_url: deliveryNoteUrl,
         delivery_note_file_name: deliveryNoteFile.name
       }));
+  await saveTaskState({
+  delivery_note_url: deliveryNoteUrl,
+  delivery_note_file_name: deliveryNoteFile.name,
+}, manifest.manifest_group_id);
       setError(null);
       alert(`✅ Delivery Note uploaded successfully!\nFile: ${deliveryNoteFile.name}`);
     } catch (err: any) {
@@ -747,6 +814,11 @@ export default function Home() {
       delivery_note_url: null,
       delivery_note_file_name: null
     }));
+        // Save to Supabase
+    saveTaskState({
+      delivery_note_url: null,
+      delivery_note_file_name: null,
+    });
     setError(null);
   };
 
@@ -829,6 +901,15 @@ export default function Home() {
           mix2_file_name: mix2Name || a.mix2_file_name
         }))
       );
+            // Save to Supabase — use manifest.manifest_group_id as fallback
+      const update: any = {};
+      if (epd1Url) update.epd1_url = epd1Url;
+      if (mix1Url) update.mix1_url = mix1Url;
+      if (epd2Url) update.epd2_url = epd2Url;
+      if (mix2Url) update.mix2_url = mix2Url;
+      if (Object.keys(update).length > 0) {
+        await saveTaskState(update, manifest.manifest_group_id);
+      }
       setError(null);
       alert(`✅ Certificates uploaded successfully!\nEPD 1: ${epd1FileName || "Not uploaded"}\nMix 1: ${mix1FileName || "Not uploaded"}\nEPD 2: ${epd2FileName || "Not uploaded"}\nMix 2: ${mix2FileName || "Not uploaded"}`);
     } catch (err: any) {
@@ -1164,7 +1245,42 @@ export default function Home() {
       </div>
     );
   };
+  // ============================================
+  // PHASE 3: Save per-task state to Supabase
+  // ============================================
+   const saveTaskState = async (
+    updates: Partial<{
+      selected_scope: string;
+      selected_defect: string;
+      dispatcher_panels_count: number;
+      dispatcher_notes: string;
+      epd1_url: string | null;
+      mix1_url: string | null;
+      epd2_url: string | null;
+      mix2_url: string | null;
+      delivery_note_url: string | null;
+      delivery_note_file_name: string | null;
+    }>,
+    manifestIdOverride?: string
+  ) => {
+    const targetId = manifestIdOverride || selectedTask?.manifest_group_id;
 
+    if (!targetId) {
+      console.warn("[SAVE] BLOCKED - no manifest id");
+      return;
+    }
+
+    console.log("[SAVE] Saving:", updates, "for:", targetId);
+
+    const { error } = await supabase
+      .from("manifests")
+      .update(updates)
+      .eq("manifest_group_id", targetId);
+
+    if (error) {
+      console.error("Failed to save task state:", error);
+    }
+  };
   const renderDispatcherActions = () => {
     const loadingDuration = getLoadingDuration();
     
@@ -1217,8 +1333,10 @@ export default function Home() {
           </div>
           <div className="grid grid-cols-3 gap-2 mt-1">
             <button
-              onClick={() => setManifest(prev => ({ ...prev, scope: "FULL" }))}
-              className={`px-2 py-1.5 rounded text-[10px] font-bold uppercase transition ${
+onClick={() => {
+  setManifest(prev => ({ ...prev, scope: "FULL" }));
+  saveTaskState({ selected_scope: "FULL" }, manifest.manifest_group_id);
+}}              className={`px-2 py-1.5 rounded text-[10px] font-bold uppercase transition ${
                 manifest.scope === "FULL"
                   ? "bg-green-600 text-white"
                   : "bg-slate-800 text-slate-400 hover:bg-slate-700"
@@ -1227,8 +1345,10 @@ export default function Home() {
               🔵 Full
             </button>
             <button
-              onClick={() => setManifest(prev => ({ ...prev, scope: "DELIVERY_ONLY" }))}
-              className={`px-2 py-1.5 rounded text-[10px] font-bold uppercase transition ${
+onClick={() => {
+  setManifest(prev => ({ ...prev, scope: "DELIVERY_ONLY" }));
+ saveTaskState({ selected_scope: "DELIVERY_ONLY" }, manifest.manifest_group_id);
+}}              className={`px-2 py-1.5 rounded text-[10px] font-bold uppercase transition ${
                 manifest.scope === "DELIVERY_ONLY"
                   ? "bg-blue-600 text-white"
                   : "bg-slate-800 text-slate-400 hover:bg-slate-700"
@@ -1237,8 +1357,10 @@ export default function Home() {
               🚚 Delivery
             </button>
             <button
-              onClick={() => setManifest(prev => ({ ...prev, scope: "FACTORY_ONLY" }))}
-              className={`px-2 py-1.5 rounded text-[10px] font-bold uppercase transition ${
+onClick={() => {
+  setManifest(prev => ({ ...prev, scope: "FACTORY_ONLY" }));
+ saveTaskState({ selected_scope: "FACTORY_ONLY" }, manifest.manifest_group_id);
+}}              className={`px-2 py-1.5 rounded text-[10px] font-bold uppercase transition ${
                 manifest.scope === "FACTORY_ONLY"
                   ? "bg-amber-600 text-white"
                   : "bg-slate-800 text-slate-400 hover:bg-slate-700"
@@ -1482,8 +1604,10 @@ export default function Home() {
                   name="dispatcherDefect"
                   value={defect}
                   checked={selectedDispatcherDefect === defect}
-                  onChange={(e) => setSelectedDispatcherDefect(e.target.value)}
-                  className="accent-amber-500"
+onChange={(e) => {
+  setSelectedDispatcherDefect(e.target.value);
+ saveTaskState({ selected_defect: e.target.value }, manifest.manifest_group_id);
+}}                  className="accent-amber-500"
                 />
                 <span>{defect}</span>
               </label>
@@ -1562,6 +1686,50 @@ export default function Home() {
               : "Yusuf Al Hamadi"
           }
           userRole={profile}
+          selectedTaskId={selectedTask?.task_id || null}
+                    onSelectTask={(task) => {
+            setSelectedTask(task);
+
+            // ============================================
+            // PHASE 2: Load per-task state from Supabase
+            // ============================================
+
+            // 1. Load the scope
+            setManifest((prev) => ({
+              ...prev,
+              manifest_group_id: task.manifest_group_id,
+              scope: (task.selected_scope as any) || "FULL",
+              delivery_note_url: task.delivery_note_url || null,
+              delivery_note_file_name: task.delivery_note_file_name || null,
+              // Update driver, vehicle, inspector details
+              driver: {
+                name: task.driver_name || "TBD",
+                id: "AUTO",
+                phone: task.driver_phone || "TBD",
+                email: "",
+                rating: task.driver_rating || 0,
+                totalTrips: task.driver_total_trips || 0,
+                isExternal: false,
+              },
+              vehicle: {
+                plateNumber: task.vehicle_plate || "TBD",
+                trailerType: (task.vehicle_trailer_type as any) || "FLATBED",
+                ownership: (task.vehicle_ownership as any) || "OWNED",
+              },
+              siteInspector: {
+                name: task.inspector_name || "TBD",
+                phone: task.inspector_phone || "TBD",
+                email: task.inspector_email || "",
+                company: "Site Project",
+              },
+            }));
+
+            // 2. Load the defect
+            setSelectedDispatcherDefect(task.selected_defect || "No Defects");
+
+            // 3. Load the panels for this task
+            loadAssetsForTask(task.manifest_group_id);
+          }}
         />
 
         {/* Profile Switcher */}
@@ -1592,164 +1760,213 @@ export default function Home() {
           </button>
         </div>
 
-        {/* Driver, Vehicle & Site Inspector Info - Shown to ALL nodes */}
-        <div className="bg-slate-950 border border-slate-800/80 p-2.5 rounded-lg space-y-1.5 animate-fade-in">
-          <div className="flex items-center justify-between">
-            <span className="text-[8px] uppercase font-bold text-slate-500 tracking-wider">
-              🚗 Trip Assignment
-            </span>
-            <span className="text-[8px] text-cyan-400 font-mono">
-              {manifest.manifest_group_id}
-            </span>
-          </div>
-
-          {/* Scope & External Status */}
-          <div className="flex flex-wrap gap-2 border-b border-slate-800/60 pb-1">
-            <span className={`text-[8px] px-2 py-0.5 rounded font-bold ${
-              manifest.scope === "FULL" ? "bg-green-950/50 text-green-400" :
-              manifest.scope === "FACTORY_ONLY" ? "bg-amber-950/50 text-amber-400" :
-              "bg-blue-950/50 text-blue-400"
-            }`}>
-              {manifest.scope === "FULL" ? "🔵 Full Service" :
-               manifest.scope === "FACTORY_ONLY" ? "🏭 Factory Only" :
-               "🚚 Delivery Only"}
-            </span>
-            {manifest.externalDriver && (
-              <span className="text-[8px] px-2 py-0.5 rounded bg-purple-950/50 text-purple-400 font-bold">
-                🔗 External Driver
+        {/* ✨ Active Trip Details — driven by task selection */}
+        {selectedTask ? (
+          <div className="bg-slate-950 border border-cyan-700/50 p-2.5 rounded-lg space-y-1.5 animate-fade-in">
+            <div className="flex items-center justify-between border-b border-slate-800/60 pb-1">
+              <span className="text-[8px] uppercase font-bold text-cyan-400 tracking-wider">
+                🚗 Active Trip: {selectedTask.manifest_group_id}
               </span>
-            )}
-            {manifest.externalInspector && (
-              <span className="text-[8px] px-2 py-0.5 rounded bg-purple-950/50 text-purple-400 font-bold">
-                🔗 External Inspector
+              <span
+                className={`text-[8px] px-2 py-0.5 rounded font-bold ${
+                  selectedTask.priority === "HIGH"
+                    ? "bg-red-950/50 text-red-400"
+                    : selectedTask.priority === "MEDIUM"
+                    ? "bg-amber-950/50 text-amber-400"
+                    : "bg-slate-800 text-slate-400"
+                }`}
+              >
+                {selectedTask.priority}
               </span>
-            )}
-          </div>
+            </div>
 
-          {/* Driver Info */}
-          <div className="grid grid-cols-2 gap-1 text-[10px]">
-            <div className="text-slate-400">Driver:</div>
-            <div className="text-slate-200 font-medium text-right">
-              {manifest.driver.name}
-              {manifest.driver.isExternal && (
-                <span className="text-amber-500 text-[8px] ml-1">(External)</span>
-              )}
+            {/* Assignment metadata */}
+            <div className="grid grid-cols-2 gap-1 text-[10px]">
+              <div className="text-slate-400">Assigned by:</div>
+              <div className="text-slate-200 text-right font-bold">
+                {selectedTask.assigned_by}
+              </div>
+              <div className="text-slate-400">Assigned at:</div>
+              <div className="text-slate-200 text-right text-[9px]">
+                {new Date(selectedTask.assigned_at).toLocaleString("en-GB", {
+                  day: "2-digit",
+                  month: "short",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  hour12: true,
+                })}
+              </div>
             </div>
-            <div className="text-slate-400">Contact:</div>
-            <div className="text-slate-200 text-right font-mono text-[9px]">{manifest.driver.phone}</div>
-            <div className="text-slate-400">Rating:</div>
-            <div className="text-right">
-              {manifest.driver.rating > 0 ? (
-                <span className="text-amber-400 font-bold">
-                  {manifest.driver.rating.toFixed(1)} ★ ({manifest.driver.totalTrips} trips)
-                </span>
-              ) : (
-                <span className="text-slate-500 italic">Not rated yet</span>
-              )}
-            </div>
-          </div>
 
-          {/* Vehicle Info */}
-          <div className="grid grid-cols-2 gap-1 text-[10px] border-t border-slate-800/60 pt-1">
-            <div className="text-slate-400">Plate:</div>
-            <div className="text-slate-200 text-right font-mono">{manifest.vehicle.plateNumber}</div>
-            <div className="text-slate-400">Trailer:</div>
-            <div className="text-slate-200 text-right">{manifest.vehicle.trailerType}</div>
-            <div className="text-slate-400">Ownership:</div>
-            <div className={`text-right font-bold ${manifest.vehicle.ownership === 'OWNED' ? 'text-green-400' : 'text-amber-400'}`}>
-              {manifest.vehicle.ownership}
-            </div>
-          </div>
-
-          {/* Site Inspector Contact Info */}
-          <div className="border-t border-slate-800/60 pt-1 mt-1">
-            <div className="flex items-center gap-1">
-              <span className="text-[8px] text-slate-400">👷 Site Inspector:</span>
-              <span className="text-slate-200 font-medium text-[9px]">{manifest.siteInspector.name}</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="text-[8px] text-slate-400">📞</span>
-              <span className="text-slate-200 text-[9px] font-mono">{manifest.siteInspector.phone}</span>
-            </div>
-            {manifest.siteInspector.email && (
-              <div className="flex items-center gap-1">
-                <span className="text-[8px] text-slate-400">✉️</span>
-                <span className="text-slate-200 text-[9px]">{manifest.siteInspector.email}</span>
+            {/* Driver details */}
+            {(selectedTask.driver_name || selectedTask.trip_details?.driver) && (
+              <div className="grid grid-cols-2 gap-1 text-[10px] border-t border-slate-800/60 pt-1">
+                <div className="text-slate-400">Driver:</div>
+                <div className="text-slate-200 text-right">
+                  {selectedTask.driver_name || selectedTask.trip_details?.driver}
+                </div>
+                {selectedTask.driver_phone && (
+                  <>
+                    <div className="text-slate-400">Contact:</div>
+                    <div className="text-slate-200 text-right font-mono text-[9px]">
+                      {selectedTask.driver_phone}
+                    </div>
+                  </>
+                )}
+                {selectedTask.driver_rating !== null &&
+                  selectedTask.driver_rating !== undefined &&
+                  selectedTask.driver_rating > 0 && (
+                    <>
+                      <div className="text-slate-400">Rating:</div>
+                      <div className="text-amber-400 text-right font-bold">
+                        {selectedTask.driver_rating.toFixed(1)} ★ (
+                        {selectedTask.driver_total_trips || 0} trips)
+                      </div>
+                    </>
+                  )}
               </div>
             )}
-          </div>
 
-          {/* External Portal Links */}
-          {(manifest.externalDriver || manifest.externalInspector) && (
-            <div className="border-t border-slate-800/60 pt-1 mt-1 space-y-1">
-              {manifest.externalDriver && (
-                <div className="flex items-center gap-2">
-                  <span className="text-[8px] text-slate-400">🔗 Driver Portal:</span>
-                  <button
-                    onClick={generateDriverLink}
-                    className="text-[8px] bg-cyan-600 hover:bg-cyan-500 text-slate-950 px-2 py-0.5 rounded font-bold transition"
-                  >
-                    Generate Link
-                  </button>
-                  {manifest.driverPortalLink && (
-                    <span className="text-[7px] text-green-400">✅ Copied</span>
-                  )}
+            {/* Vehicle details */}
+            {(selectedTask.vehicle_plate || selectedTask.trip_details?.vehicle_plate) && (
+              <div className="grid grid-cols-2 gap-1 text-[10px] border-t border-slate-800/60 pt-1">
+                <div className="text-slate-400">Plate:</div>
+                <div className="text-slate-200 text-right font-mono">
+                  {selectedTask.vehicle_plate || selectedTask.trip_details?.vehicle_plate}
                 </div>
-              )}
-              {manifest.externalInspector && (
-                <div className="flex items-center gap-2">
-                  <span className="text-[8px] text-slate-400">🔗 Inspector Portal:</span>
-                  <button
-                    onClick={generateInspectorLink}
-                    className="text-[8px] bg-cyan-600 hover:bg-cyan-500 text-slate-950 px-2 py-0.5 rounded font-bold transition"
-                  >
-                    Generate Link
-                  </button>
-                  {manifest.inspectorPortalLink && (
-                    <span className="text-[7px] text-green-400">✅ Copied</span>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Inspector Rating Display */}
-          {manifest.inspectorRating && (
-            <div className="border-t border-slate-800/60 pt-1 mt-1">
-              <div className="flex justify-between items-center">
-                <span className="text-[8px] text-slate-400">Inspector Rating:</span>
-                <span className="text-amber-400 font-bold text-[10px]">
-                  {manifest.inspectorRating.score} ★
-                </span>
+                {selectedTask.vehicle_trailer_type && (
+                  <>
+                    <div className="text-slate-400">Trailer:</div>
+                    <div className="text-slate-200 text-right">
+                      {selectedTask.vehicle_trailer_type}
+                    </div>
+                  </>
+                )}
+                {selectedTask.vehicle_ownership && (
+                  <>
+                    <div className="text-slate-400">Ownership:</div>
+                    <div
+                      className={`text-right font-bold ${
+                        selectedTask.vehicle_ownership === "OWNED"
+                          ? "text-green-400"
+                          : "text-amber-400"
+                      }`}
+                    >
+                      {selectedTask.vehicle_ownership}
+                    </div>
+                  </>
+                )}
               </div>
-              {manifest.inspectorRating.comment && (
-                <p className="text-[8px] text-slate-400 italic mt-0.5">
-                  "{manifest.inspectorRating.comment}"
-                </p>
-              )}
-              <span className="text-[7px] text-slate-500 font-mono">
-                {manifest.inspectorRating.timestamp}
-              </span>
-            </div>
-          )}
+            )}
 
-          {/* Delivery Note Display */}
-          {manifest.delivery_note_url && (
-            <div className="border-t border-slate-800/60 pt-1 mt-1">
-              <div className="flex justify-between items-center">
-                <span className="text-[8px] text-slate-400">📋 Delivery Note:</span>
-                <a
-                  href={manifest.delivery_note_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-cyan-400 underline font-bold text-[9px]"
+            {/* Inspector details */}
+            {selectedTask.inspector_name && (
+              <div className="border-t border-slate-800/60 pt-1 text-[10px] space-y-0.5">
+                <div className="flex items-center gap-1">
+                  <span className="text-slate-400">👷 Site Inspector:</span>
+                  <span className="text-slate-200 font-medium">
+                    {selectedTask.inspector_name}
+                  </span>
+                </div>
+                {selectedTask.inspector_phone && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-400">📞</span>
+                    <span className="text-slate-200 font-mono text-[9px]">
+                      {selectedTask.inspector_phone}
+                    </span>
+                  </div>
+                )}
+                {selectedTask.inspector_email && (
+                  <div className="flex items-center gap-1">
+                    <span className="text-slate-400">✉️</span>
+                    <span className="text-slate-200 text-[9px]">
+                      {selectedTask.inspector_email}
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Site info */}
+            {selectedTask.site_name && (
+              <div className="grid grid-cols-2 gap-1 text-[10px] border-t border-slate-800/60 pt-1">
+                <div className="text-slate-400">Site:</div>
+                <div className="text-slate-200 text-right">
+                  {selectedTask.site_name}
+                </div>
+                {selectedTask.trip_details?.panels_count && (
+                  <>
+                    <div className="text-slate-400">Panels:</div>
+                    <div className="text-cyan-400 text-right font-bold">
+                      {selectedTask.trip_details.panels_count}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Multi-factory (dispatcher only) */}
+            {selectedTask.factories &&
+              selectedTask.factories.length > 1 &&
+              profile === "DISPATCHER" && (
+                <div className="mt-1 pt-1 border-t border-slate-800/40 space-y-1">
+                  <span className="text-[8px] text-purple-400 uppercase font-bold">
+                    🏭 Multi-Factory Sequence
+                  </span>
+                  {selectedTask.factories.map((f, idx) => (
+                    <div
+                      key={idx}
+                      className="flex justify-between text-[8px] bg-slate-900/50 px-1.5 py-1 rounded"
+                    >
+                      <span className="text-slate-400">
+                        Stage {f.loading_order}: {f.factory_name}
+                      </span>
+                      <span className="text-slate-300">
+                        {f.panels_count} panels
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+            {/* GPS status */}
+            {selectedTask.driver_status && (
+              <div className="grid grid-cols-2 gap-1 text-[10px] border-t border-slate-800/60 pt-1">
+                <div className="text-slate-400">🛰️ GPS:</div>
+                <div
+                  className={`text-right font-bold ${
+                    selectedTask.driver_status === "IN_TRANSIT"
+                      ? "text-amber-400"
+                      : selectedTask.driver_status === "AT_FACTORY"
+                      ? "text-blue-400"
+                      : selectedTask.driver_status === "ARRIVED"
+                      ? "text-green-400"
+                      : "text-slate-400"
+                  }`}
                 >
-                  📄 {manifest.delivery_note_file_name || 'View Document'} ↗
-                </a>
+                  {selectedTask.driver_status.replace("_", " ")}
+                </div>
+                {selectedTask.driver_current_lat &&
+                  selectedTask.driver_current_lng && (
+                    <>
+                      <div className="text-slate-400">Position:</div>
+                      <div className="text-slate-300 text-right font-mono text-[9px]">
+                        {selectedTask.driver_current_lat.toFixed(4)},{" "}
+                        {selectedTask.driver_current_lng.toFixed(4)}
+                      </div>
+                    </>
+                  )}
               </div>
+            )}
+          </div>
+        ) : (
+          <div className="bg-slate-950 border border-slate-800/60 p-3 rounded-lg text-center animate-fade-in">
+            <div className="text-[10px] text-slate-500 italic">
+              👆 Select a task above to see full trip details
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* Component Selector - Only show if not FACTORY_ONLY */}
         {profile !== "DRIVER" && manifest.scope !== "FACTORY_ONLY" && (
