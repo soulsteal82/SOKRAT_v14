@@ -7,6 +7,7 @@ import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 import TaskDashboard, { SelectedTaskData } from "@/components/TaskDashboard";
 import { supabase } from "../app/lib/supabase";
+import DeliveryNoteModal from "@/components/DeliveryNoteModal";
 // Dynamically import Leaflet components to avoid SSR issues
 const MapContainer = dynamic(
   () => import('react-leaflet').then((mod) => mod.MapContainer),
@@ -205,9 +206,8 @@ const fileToBase64 = (file: File): Promise<string> => {
 
 export default function Home() {
   const [profile, setProfile] = useState<"DISPATCHER" | "DRIVER" | "INSPECTOR">("DISPATCHER");
-  const [showGlobalMap, setShowGlobalMap] = useState(false);
   const [selectedTask, setSelectedTask] = useState<SelectedTaskData | null>(null);
-  const [currentPathIndex, setCurrentPathIndex] = useState(0);
+  const [showDeliveryNote, setShowDeliveryNote] = useState(false);
   const [checkedEPD, setCheckedEPD] = useState(false);
   const [checkedMixDesign, setCheckedMixDesign] = useState(false);
   const [checkedDeliveryNote, setCheckedDeliveryNote] = useState(false);
@@ -347,18 +347,15 @@ export default function Home() {
   const [selectedDelayReason, setSelectedDelayReason] = useState("");
 
   // Map state
-  const [showTrafficOverlay, setShowTrafficOverlay] = useState(true);
-  const [mapPosition, setMapPosition] = useState<[number, number]>([24.5000, 54.4500]);
-  const mapRef = useRef<any>(null);
 
   const [selectedDispatcherDefect, setSelectedDispatcherDefect] = useState(DEFECT_VECTORS[0]);
   const [selectedInspectorDefect, setSelectedInspectorDefect] = useState(DEFECT_VECTORS[0]);
   const [dispatcherRejectFiles, setDispatcherRejectFiles] = useState<File[]>([]);
   const [inspectorRejectFiles, setInspectorRejectFiles] = useState<File[]>([]);
 
-  const currentAsset = assets.find(a => a.id === activeAssetId) || assets[0];
-  const ledgerEndRef = useRef<HTMLDivElement | null>(null);
-
+const currentAsset = assets.length > 0 
+  ? (assets.find(a => a.id === activeAssetId) || assets[0])
+  : null;
   // ============================================
   // PHASE 2: Load assets (panels) from Supabase for a task
   // ============================================
@@ -457,8 +454,8 @@ export default function Home() {
       "INSTALLATION_INITIATED": 4,
       "INSTALLATION_COMPLETED": 4
     };
-    const index = stateMap[currentAsset.state] ?? 0;
-    return ROUTE_COORDINATES[index] || ROUTE_COORDINATES[0];
+    const index = stateMap[String(currentAsset?.state || "")] ?? 0;
+            return ROUTE_COORDINATES[index] || ROUTE_COORDINATES[0];
   };
 
   // Check traffic congestion (simulated)
@@ -540,43 +537,16 @@ export default function Home() {
   }, [assets]);
 
   useEffect(() => {
-    if (ledgerEndRef.current) {
-      ledgerEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [currentAsset?.custodyHistory]);
-
-  useEffect(() => {
-    setCheckedEPD(currentAsset.state === "INSTALLATION_COMPLETED");
-    setCheckedMixDesign(currentAsset.state === "INSTALLATION_COMPLETED");
-    setCheckedDeliveryNote(currentAsset.state === "INSTALLATION_COMPLETED");
+    setCheckedEPD(currentAsset?.state === "INSTALLATION_COMPLETED");
+    setCheckedMixDesign(currentAsset?.state === "INSTALLATION_COMPLETED");
+    setCheckedDeliveryNote(currentAsset?.state === "INSTALLATION_COMPLETED");
   }, [activeAssetId]);
 
-  useEffect(() => {
-    const stateMap: Record<string, number> = {
-      "INITIALIZED": 0,
-      "LOADING_INITIATED": 0,
-      "LOADING_COMPLETED": 0,
-      "DISPATCHED": 2,
-      "ARRIVED_AT_GATE": 3,
-      "RECEIVED_ON_SITE": 3,
-      "GATE_IN_OFFLOADING": 3,
-      "OFFLOADING_COMPLETED": 3,
-      "INSTALLATION_INITIATED": 4,
-      "INSTALLATION_COMPLETED": 4
-    };
-    const index = stateMap[currentAsset.state] ?? 0;
-    setCurrentPathIndex(index);
-    const pos = ROUTE_COORDINATES[index] || ROUTE_COORDINATES[0];
-    setMapPosition(pos);
-    if (mapRef.current) {
-      mapRef.current.flyTo(pos, 12, {
-        duration: 1.5
-      });
-    }
-    const isAtSite = ["ARRIVED_AT_GATE", "RECEIVED_ON_SITE", "GATE_IN_OFFLOADING", "OFFLOADING_COMPLETED",
-      "INSTALLATION_INITIATED", "INSTALLATION_COMPLETED"].includes(currentAsset.state);
+   useEffect(() => {
+    const isAtSite = currentAsset?.state ? ["ARRIVED_AT_GATE", "RECEIVED_ON_SITE", "GATE_IN_OFFLOADING", "OFFLOADING_COMPLETED",
+      "INSTALLATION_INITIATED", "INSTALLATION_COMPLETED"].includes(currentAsset.state) : false;
     setManifest(prev => ({ ...prev, geofence_verified: isAtSite }));
-  }, [currentAsset.state]);
+  }, [currentAsset?.state]);
 
   function getNextState(curr: string): string | null {
     const idx = SEQUENCE.indexOf(curr);
@@ -584,8 +554,9 @@ export default function Home() {
     return SEQUENCE[idx + 1];
   }
 
-  function getAssetCustody(state: string): string {
-    if (state === "INITIALIZED" || state === "LOADING_INITIATED" || state === "LOADING_COMPLETED") {
+ function getAssetCustody(state: string | null | undefined): string {
+  if (!state) return "—";
+  if (state === "INITIALIZED" || state === "LOADING_INITIATED" || state === "LOADING_COMPLETED") {
       return "FACTORIES (Dispatcher)";
     }
     if (state === "DISPATCHED" || state === "ARRIVED_AT_GATE") {
@@ -598,16 +569,16 @@ export default function Home() {
     return "CONSTRUCTION SITE (Inspector)";
   }
 
-  function handleBulkNFCScan() {
+    function handleBulkNFCScan() {
     setScanTypeLabel("NFC / RFID BATCH GATE SCAN");
     setIsScanning(true);
     setTimeout(() => {
       setIsScanning(false);
       const nowTime = getFormattedTimestamp();
-      setAssets(prev =>
-        prev.map(a => {
+      setAssets(prev => {
+        const newAssets = prev.map(a => {
           if (!a.hasScannedQR) {
-            return {
+            const updated = {
               ...a,
               hasScannedQR: true,
               custodyHistory: a.custodyHistory.map(log =>
@@ -616,15 +587,18 @@ export default function Home() {
                   : log
               )
             };
+            saveAssetState(updated.id, updated);
+            return updated;
           }
           return a;
-        })
-      );
+        });
+        return newAssets;
+      });
       setError(null);
     }, 1000);
   }
 
-  function handleSingleQRScan() {
+    function handleSingleQRScan() {
     setScanTypeLabel(`QR COUPLING: ${activeAssetId}`);
     setIsScanning(true);
     setTimeout(() => {
@@ -951,7 +925,7 @@ export default function Home() {
         throw "GEOFENCE_LOCKOUT: Site handshake protocol blocked. Carrier remains outside designated perimeter coordinates.";
       }
       
-      if (!isRejectingAction && !currentAsset.state.startsWith("REJECTED")) {
+      if (!isRejectingAction && !currentAsset?.state.startsWith("REJECTED")) {
         const validTransitions: Record<string, string[]> = {
           "INITIALIZED": ["LOADING_INITIATED"],
           "LOADING_INITIATED": ["LOADING_COMPLETED"],
@@ -964,9 +938,9 @@ export default function Home() {
           "INSTALLATION_INITIATED": ["INSTALLATION_COMPLETED"],
           "INSTALLATION_COMPLETED": []
         };
-        const allowed = validTransitions[currentAsset.state] || [];
+const allowed = validTransitions[currentAsset?.state || ""] || [];
         if (!allowed.includes(nextState)) {
-          throw `INVALID_SEQUENCE: Cannot transition from ${currentAsset.state} to ${nextState}.`;
+          throw `INVALID_SEQUENCE: Cannot transition from ${currentAsset?.state} to ${nextState}.`;
         }
       }
 
@@ -982,22 +956,22 @@ export default function Home() {
       const updatedFields = { ...customFields };
       const now = getFormattedTimestamp();
 
-      if (nextState === "LOADING_INITIATED" && !currentAsset.loading_started_timestamp) {
+      if (nextState === "LOADING_INITIATED" && !currentAsset?.loading_started_timestamp) {
         updatedFields.loading_started_timestamp = now;
       }
-      if (nextState === "LOADING_COMPLETED" && !currentAsset.loading_completed_timestamp) {
+      if (nextState === "LOADING_COMPLETED" && !currentAsset?.loading_completed_timestamp) {
         updatedFields.loading_completed_timestamp = now;
       }
-      if (nextState === "GATE_IN_OFFLOADING" && !currentAsset.offloading_started_timestamp) {
+      if (nextState === "GATE_IN_OFFLOADING" && !currentAsset?.offloading_started_timestamp) {
         updatedFields.offloading_started_timestamp = now;
       }
-      if (nextState === "OFFLOADING_COMPLETED" && !currentAsset.offloading_completed_timestamp) {
+      if (nextState === "OFFLOADING_COMPLETED" && !currentAsset?.offloading_completed_timestamp) {
         updatedFields.offloading_completed_timestamp = now;
       }
-      if (nextState === "INSTALLATION_INITIATED" && !currentAsset.installation_started_timestamp) {
+      if (nextState === "INSTALLATION_INITIATED" && !currentAsset?.installation_started_timestamp) {
         updatedFields.installation_started_timestamp = now;
       }
-      if (nextState === "INSTALLATION_COMPLETED" && !currentAsset.installation_completed_timestamp) {
+      if (nextState === "INSTALLATION_COMPLETED" && !currentAsset?.installation_completed_timestamp) {
         updatedFields.installation_completed_timestamp = now;
         updatedFields.installed_timestamp = now;
       }
@@ -1009,7 +983,7 @@ export default function Home() {
       };
 
       if (isRejectingAction) {
-        updatedFields.previous_state_before_rejection = currentAsset.state;
+        updatedFields.previous_state_before_rejection = currentAsset?.state;
         if (profile === "DISPATCHER" && dispatcherRejectFiles.length > 0) {
           processFiles(dispatcherRejectFiles).then(photoUrls => {
             setAssets(prev =>
@@ -1072,10 +1046,10 @@ export default function Home() {
         ? getRejectionCustody()
         : getAssetCustody(nextState);
 
-      setAssets(prev =>
-        prev.map(a => {
+      setAssets(prev => {
+        const newAssets = prev.map(a => {
           if (a.id === activeAssetId) {
-            return {
+            const updated = {
               ...a,
               state: finalState,
               ...updatedFields,
@@ -1088,10 +1062,14 @@ export default function Home() {
                 }
               ]
             };
+            // Save this asset to Supabase
+            saveAssetState(updated.id, updated);
+            return updated;
           }
           return a;
-        })
-      );
+        });
+        return newAssets;
+      });
     } catch (err: any) {
       setError(typeof err === "string" ? err : err?.message ?? String(err));
     }
@@ -1137,10 +1115,10 @@ export default function Home() {
         updatedFields.installed_timestamp = now;
       }
 
-      setAssets(prev =>
-        prev.map(a => {
+      setAssets(prev => {
+        const newAssets = prev.map(a => {
           const nextCustody = getAssetCustody(nextState);
-          return {
+          const updated = {
             ...a,
             state: finalState,
             ...updatedFields,
@@ -1149,17 +1127,21 @@ export default function Home() {
               { timestamp: getFormattedTimestamp(), state: finalState, custody: nextCustody }
             ]
           };
-        })
-      );
+          // Save this asset to Supabase
+          saveAssetState(updated.id, updated);
+          return updated;
+        });
+        return newAssets;
+      });
     } catch (err: any) {
       setError(typeof err === "string" ? err : err?.message ?? String(err));
     }
   }
 
   const getLoadingDuration = () => {
-    if (currentAsset.loading_started_timestamp && currentAsset.loading_completed_timestamp) {
-      const start = new Date(currentAsset.loading_started_timestamp);
-      const end = new Date(currentAsset.loading_completed_timestamp);
+    if (currentAsset?.loading_started_timestamp && currentAsset?.loading_completed_timestamp) {
+      const start = new Date(currentAsset?.loading_started_timestamp);
+      const end = new Date(currentAsset?.loading_completed_timestamp);
       const diff = Math.round((end.getTime() - start.getTime()) / 60000);
       return diff;
     }
@@ -1167,9 +1149,9 @@ export default function Home() {
   };
 
   const getOffloadingDuration = () => {
-    if (currentAsset.offloading_started_timestamp && currentAsset.offloading_completed_timestamp) {
-      const start = new Date(currentAsset.offloading_started_timestamp);
-      const end = new Date(currentAsset.offloading_completed_timestamp);
+    if (currentAsset?.offloading_started_timestamp && currentAsset?.offloading_completed_timestamp) {
+      const start = new Date(currentAsset?.offloading_started_timestamp);
+      const end = new Date(currentAsset?.offloading_completed_timestamp);
       const diff = Math.round((end.getTime() - start.getTime()) / 60000);
       return diff;
     }
@@ -1177,9 +1159,9 @@ export default function Home() {
   };
 
   const getInstallationDuration = () => {
-    if (currentAsset.installation_started_timestamp && currentAsset.installation_completed_timestamp) {
-      const start = new Date(currentAsset.installation_started_timestamp);
-      const end = new Date(currentAsset.installation_completed_timestamp);
+    if (currentAsset?.installation_started_timestamp && currentAsset?.installation_completed_timestamp) {
+      const start = new Date(currentAsset?.installation_started_timestamp);
+      const end = new Date(currentAsset?.installation_completed_timestamp);
       const diff = Math.round((end.getTime() - start.getTime()) / 60000);
       return diff;
     }
@@ -1281,30 +1263,155 @@ export default function Home() {
       console.error("Failed to save task state:", error);
     }
   };
+    // ============================================
+  // Save asset (panel) state to Supabase
+  // ============================================
+  const saveAssetState = async (assetId: string, updates: Partial<Asset>) => {
+    const { error } = await supabase
+      .from("assets")
+      .update({
+        state: updates.state,
+        custody_history: updates.custodyHistory,
+        loading_started_timestamp: updates.loading_started_timestamp,
+        loading_completed_timestamp: updates.loading_completed_timestamp,
+        offloading_started_timestamp: updates.offloading_started_timestamp,
+        offloading_completed_timestamp: updates.offloading_completed_timestamp,
+        installation_started_timestamp: updates.installation_started_timestamp,
+        installation_completed_timestamp: updates.installation_completed_timestamp,
+        installed_timestamp: updates.installed_timestamp,
+        factory_qa_status: updates.factory_qa_status,
+        factory_qa_defect_reason: updates.factory_qa_defect_reason,
+        site_rejection_reason: updates.site_rejection_reason,
+        rejection_photos: updates.rejection_photos,
+        has_scanned_qr: updates.hasScannedQR,
+        transit_delay_minutes: updates.transit_delay_minutes,
+        factory_delay_minutes: updates.factory_delay_minutes,
+        site_delay_minutes: updates.site_delay_minutes,
+        delay_reason: updates.delay_reason,
+      })
+      .eq("asset_serial", assetId)
+      .eq("manifest_group_id", manifest.manifest_group_id);
+  };
+    // ============================================
+  // Reset All Data (for testing)
+  // ============================================
+  const resetAllData = async () => {
+    const confirmed = window.confirm(
+      "⚠️ This will RESET all trip data:\n\n" +
+      "• All scopes → FULL\n" +
+      "• All defects → No Defects\n" +
+      "• All certificates cleared\n" +
+      "• All panels → INITIALIZED\n" +
+      "• All custody history reset\n\n" +
+      "Continue?"
+    );
+
+    if (!confirmed) return;
+
+    try {
+      // Reset all manifests
+      const { error: manifestError } = await supabase
+        .from("manifests")
+        .update({
+          selected_scope: "FULL",
+          selected_defect: "No Defects",
+          dispatcher_notes: null,
+          epd1_url: null,
+          mix1_url: null,
+          epd2_url: null,
+          mix2_url: null,
+          delivery_note_url: null,
+          delivery_note_file_name: null,
+        })
+        .neq("manifest_group_id", "");
+
+      if (manifestError) throw manifestError;
+
+      // Reset all assets
+      const { error: assetError } = await supabase
+        .from("assets")
+        .update({
+          state: "INITIALIZED",
+          custody_history: [
+            {
+              timestamp: "[PENDING HARDWARE SCAN]",
+              state: "INITIALIZED",
+              custody: "FACTORIES (Dispatcher)",
+            },
+          ],
+          has_scanned_qr: false,
+          loading_started_timestamp: null,
+          loading_completed_timestamp: null,
+          offloading_started_timestamp: null,
+          offloading_completed_timestamp: null,
+          installation_started_timestamp: null,
+          installation_completed_timestamp: null,
+          installed_timestamp: null,
+          factory_qa_defect_reason: null,
+          site_rejection_reason: null,
+          rejection_photos: [],
+          factory_delay_minutes: 0,
+          transit_delay_minutes: 0,
+          site_delay_minutes: 0,
+          delay_reason: null,
+        })
+        .neq("asset_serial", "");
+
+      if (assetError) throw assetError;
+
+      // Clear local state
+      setSelectedTask(null);
+      setSelectedDelayReason("");
+      setDispatcherRejectFiles([]);
+      setInspectorRejectFiles([]);
+      setEpd1File(null);
+      setMix1File(null);
+      setEpd2File(null);
+      setMix2File(null);
+      setEpd1FileName("");
+      setMix1FileName("");
+      setEpd2FileName("");
+      setMix2FileName("");
+      setDeliveryNoteFile(null);
+      setDeliveryNoteFileName("");
+      setCheckedEPD(false);
+      setCheckedMixDesign(false);
+      setCheckedDeliveryNote(false);
+      setError(null);
+
+      alert("✅ All data reset successfully!\n\nThe app will reload now.");
+
+      // Force reload to refresh everything
+      window.location.reload();
+    } catch (err: any) {
+      console.error("Reset failed:", err);
+      setError("Reset failed: " + err.message);
+    }
+  };
   const renderDispatcherActions = () => {
     const loadingDuration = getLoadingDuration();
     
     // Certificate status variables - kept for UI display but NOT for validation
-    const hasEpd1 = currentAsset.epd1_certificate_url !== null;
-    const hasMix1 = currentAsset.mix1_certificate_url !== null;
-    const hasEpd2 = currentAsset.epd2_certificate_url !== null;
-    const hasMix2 = currentAsset.mix2_certificate_url !== null;
+    const hasEpd1 = currentAsset?.epd1_certificate_url !== null;
+    const hasMix1 = currentAsset?.mix1_certificate_url !== null;
+    const hasEpd2 = currentAsset?.epd2_certificate_url !== null;
+    const hasMix2 = currentAsset?.mix2_certificate_url !== null;
     const hasAnyEpd = hasEpd1 || hasEpd2;
     const hasAnyMix = hasMix1 || hasMix2;
     const hasCertificates = hasAnyEpd && hasAnyMix;
     const hasUploadedFiles = epd1File !== null || mix1File !== null || epd2File !== null || mix2File !== null;
 
     const getDispatcherNextState = () => {
-      if (currentAsset.state === "INITIALIZED") return "LOADING_INITIATED";
-      if (currentAsset.state === "LOADING_INITIATED") return "LOADING_COMPLETED";
-      if (currentAsset.state === "LOADING_COMPLETED") return "DISPATCHED";
+      if (currentAsset?.state === "INITIALIZED") return "LOADING_INITIATED";
+      if (currentAsset?.state === "LOADING_INITIATED") return "LOADING_COMPLETED";
+      if (currentAsset?.state === "LOADING_COMPLETED") return "DISPATCHED";
       return null;
     };
 
     const getDispatcherButtonLabel = () => {
-      if (currentAsset.state === "INITIALIZED") return "🚀 Start Loading";
-      if (currentAsset.state === "LOADING_INITIATED") return "✅ Complete Loading";
-      if (currentAsset.state === "LOADING_COMPLETED") return "📦 Confirm Dispatch";
+      if (currentAsset?.state === "INITIALIZED") return "🚀 Start Loading";
+      if (currentAsset?.state === "LOADING_INITIATED") return "✅ Complete Loading";
+      if (currentAsset?.state === "LOADING_COMPLETED") return "📦 Confirm Dispatch";
       return "⏳ Waiting...";
     };
 
@@ -1316,6 +1423,13 @@ export default function Home() {
         <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold mb-1">
           Available System Actions:
         </span>
+                {/* View Delivery Note */}
+        <button
+          onClick={() => setShowDeliveryNote(true)}
+          className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 font-bold p-2 rounded text-xs uppercase tracking-wider transition flex items-center justify-center gap-2"
+        >
+          📋 View Delivery Note
+        </button>
 
         {/* Current Scope Display & Controls */}
         <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg">
@@ -1382,7 +1496,7 @@ onClick={() => {
           </div>
         )}
 
-        {currentAsset.state.startsWith("REJECTED_") && (
+        {currentAsset?.state.startsWith("REJECTED_") && (
           <div className="p-2.5 bg-red-950/20 border border-red-900/40 rounded-lg flex flex-col gap-2 border-l-4 border-l-red-500">
             <span className="text-[11px] text-slate-300 font-medium">
               BIM structural entry flagged as factory rejection. Overturn item status?
@@ -1536,54 +1650,6 @@ onClick={() => {
           </div>
         </div>
 
-        {/* Delivery Note Upload Section */}
-        <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg">
-          <span className="block text-[8px] text-slate-400 uppercase font-bold mb-2">
-            📋 Delivery Note <span className="text-slate-500">(Optional)</span>
-          </span>
-          <div className="space-y-2">
-            <div className="flex gap-2">
-              <input
-                type="file"
-                accept=".pdf,.doc,.docx,.jpg,.png"
-                onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    setDeliveryNoteFile(e.target.files[0]);
-                    setDeliveryNoteFileName(e.target.files[0].name);
-                  }
-                }}
-                className="flex-1 text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-800 file:text-cyan-400 hover:file:bg-slate-700"
-              />
-              <button
-                onClick={handleDeliveryNoteUpload}
-                disabled={!deliveryNoteFile}
-                className={`font-bold py-1.5 px-3 rounded text-xs uppercase transition ${
-                  deliveryNoteFile
-                    ? "bg-cyan-600 hover:bg-cyan-500 text-slate-950"
-                    : "bg-slate-800 text-slate-500 cursor-not-allowed opacity-50"
-                }`}
-              >
-                Upload
-              </button>
-              <button
-                onClick={clearDeliveryNote}
-                disabled={!manifest.delivery_note_url}
-                className="bg-red-950 hover:bg-red-900 text-red-400 border border-red-900/60 font-bold py-1.5 px-3 rounded text-xs uppercase transition disabled:opacity-30 disabled:pointer-events-none"
-              >
-                ✕
-              </button>
-            </div>
-            {manifest.delivery_note_file_name && (
-              <div className="text-[9px] text-green-400 text-center font-mono">
-                ✅ {manifest.delivery_note_file_name}
-              </div>
-            )}
-            <div className="text-[7px] text-slate-500 text-center">
-              ℹ️ Upload delivery note document (optional)
-            </div>
-          </div>
-        </div>
-
         {/* Defect Selection */}
         <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg">
           <span className="block text-[8px] text-slate-400 uppercase font-bold mb-2">
@@ -1636,7 +1702,7 @@ onChange={(e) => {
                 }
               );
             }}
-            disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(currentAsset.state)}
+disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(currentAsset?.state || "")}
             className="bg-red-950 hover:bg-red-900 text-red-400 border border-red-900/60 font-bold p-2 rounded text-xs uppercase tracking-wider transition disabled:opacity-30 disabled:pointer-events-none"
           >
             Reject Focus Item
@@ -1675,6 +1741,12 @@ onChange={(e) => {
           <p className="text-[9px] text-cyan-500 tracking-widest font-mono mt-0.5 uppercase">
             Smart Operations & Kinetic Real-Time Asset Twin
           </p>
+                    <button
+            onClick={resetAllData}
+            className="mt-3 text-[9px] bg-red-950/60 hover:bg-red-900 border border-red-800/60 text-red-400 px-3 py-1 rounded font-bold uppercase tracking-wider transition"
+          >
+            🔄 Reset All Data (Testing Only)
+          </button>
         </div>
         {/* Task Dashboard for current role */}
         <TaskDashboard
@@ -1687,49 +1759,70 @@ onChange={(e) => {
           }
           userRole={profile}
           selectedTaskId={selectedTask?.task_id || null}
-                    onSelectTask={(task) => {
-            setSelectedTask(task);
+onSelectTask={(task) => {
+  setSelectedTask(task);
 
-            // ============================================
-            // PHASE 2: Load per-task state from Supabase
-            // ============================================
+  // ============================================
+  // RESET transient UI state for the new task
+  // ============================================
+  setSelectedDelayReason("");
+  setDispatcherRejectFiles([]);
+  setInspectorRejectFiles([]);
+  setCheckedEPD(false);
+  setCheckedMixDesign(false);
+  setCheckedDeliveryNote(false);
+  setEpd1File(null);
+  setMix1File(null);
+  setEpd2File(null);
+  setMix2File(null);
+  setEpd1FileName("");
+  setMix1FileName("");
+  setEpd2FileName("");
+  setMix2FileName("");
+  setDeliveryNoteFile(null);
+  setDeliveryNoteFileName("");
+  setInputBatchSize(1);
+  setError(null);
 
-            // 1. Load the scope
-            setManifest((prev) => ({
-              ...prev,
-              manifest_group_id: task.manifest_group_id,
-              scope: (task.selected_scope as any) || "FULL",
-              delivery_note_url: task.delivery_note_url || null,
-              delivery_note_file_name: task.delivery_note_file_name || null,
-              // Update driver, vehicle, inspector details
-              driver: {
-                name: task.driver_name || "TBD",
-                id: "AUTO",
-                phone: task.driver_phone || "TBD",
-                email: "",
-                rating: task.driver_rating || 0,
-                totalTrips: task.driver_total_trips || 0,
-                isExternal: false,
-              },
-              vehicle: {
-                plateNumber: task.vehicle_plate || "TBD",
-                trailerType: (task.vehicle_trailer_type as any) || "FLATBED",
-                ownership: (task.vehicle_ownership as any) || "OWNED",
-              },
-              siteInspector: {
-                name: task.inspector_name || "TBD",
-                phone: task.inspector_phone || "TBD",
-                email: task.inspector_email || "",
-                company: "Site Project",
-              },
-            }));
+  // ============================================
+  // PHASE 2: Load per-task state from Supabase
+  // ============================================
 
-            // 2. Load the defect
-            setSelectedDispatcherDefect(task.selected_defect || "No Defects");
+  // 1. Load the manifest data
+  setManifest((prev) => ({
+    ...prev,
+    manifest_group_id: task.manifest_group_id,
+    scope: (task.selected_scope as any) || "FULL",
+    delivery_note_url: task.delivery_note_url || null,
+    delivery_note_file_name: task.delivery_note_file_name || null,
+    driver: {
+      name: task.driver_name || "TBD",
+      id: "AUTO",
+      phone: task.driver_phone || "TBD",
+      email: "",
+      rating: task.driver_rating || 0,
+      totalTrips: task.driver_total_trips || 0,
+      isExternal: false,
+    },
+    vehicle: {
+      plateNumber: task.vehicle_plate || "TBD",
+      trailerType: (task.vehicle_trailer_type as any) || "FLATBED",
+      ownership: (task.vehicle_ownership as any) || "OWNED",
+    },
+    siteInspector: {
+      name: task.inspector_name || "TBD",
+      phone: task.inspector_phone || "TBD",
+      email: task.inspector_email || "",
+      company: "Site Project",
+    },
+  }));
 
-            // 3. Load the panels for this task
-            loadAssetsForTask(task.manifest_group_id);
-          }}
+  // 2. Load the defect
+  setSelectedDispatcherDefect(task.selected_defect || "No Defects");
+
+  // 3. Load the panels for this task
+  loadAssetsForTask(task.manifest_group_id);
+}}
         />
 
         {/* Profile Switcher */}
@@ -1739,235 +1832,22 @@ onChange={(e) => {
               [SYS_AUTH] Target Actor Node:
             </label>
             <select
-              className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs text-cyan-400 focus:outline-none font-bold"
-              value={profile}
-              onChange={(e) => setProfile(e.target.value as any)}
-            >
+  className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs text-cyan-400 focus:outline-none font-bold"
+  value={profile}
+  onChange={(e) => {
+    setProfile(e.target.value as any);
+    setSelectedTask(null);
+    setAssets([]);
+    setActiveAssetId("");
+  }}
+>
               <option value="DISPATCHER">DISPATCHER NODE (Plant)</option>
               <option value="DRIVER">DRIVER NODE (Transit Log)</option>
               <option value="INSPECTOR">INSPECTOR NODE (Site Structure)</option>
             </select>
           </div>
-          <button
-            onClick={() => setShowGlobalMap(!showGlobalMap)}
-            className={`w-full border rounded-lg text-xs font-bold uppercase transition-all flex items-center justify-center ${
-              showGlobalMap
-                ? "bg-cyan-950/30 border-cyan-500 text-cyan-400"
-                : "bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700"
-            }`}
-          >
-            {showGlobalMap ? " 🌐 Hide Route" : " 🌐 Show Map"}
-          </button>
         </div>
-
-        {/* ✨ Active Trip Details — driven by task selection */}
-        {selectedTask ? (
-          <div className="bg-slate-950 border border-cyan-700/50 p-2.5 rounded-lg space-y-1.5 animate-fade-in">
-            <div className="flex items-center justify-between border-b border-slate-800/60 pb-1">
-              <span className="text-[8px] uppercase font-bold text-cyan-400 tracking-wider">
-                🚗 Active Trip: {selectedTask.manifest_group_id}
-              </span>
-              <span
-                className={`text-[8px] px-2 py-0.5 rounded font-bold ${
-                  selectedTask.priority === "HIGH"
-                    ? "bg-red-950/50 text-red-400"
-                    : selectedTask.priority === "MEDIUM"
-                    ? "bg-amber-950/50 text-amber-400"
-                    : "bg-slate-800 text-slate-400"
-                }`}
-              >
-                {selectedTask.priority}
-              </span>
-            </div>
-
-            {/* Assignment metadata */}
-            <div className="grid grid-cols-2 gap-1 text-[10px]">
-              <div className="text-slate-400">Assigned by:</div>
-              <div className="text-slate-200 text-right font-bold">
-                {selectedTask.assigned_by}
-              </div>
-              <div className="text-slate-400">Assigned at:</div>
-              <div className="text-slate-200 text-right text-[9px]">
-                {new Date(selectedTask.assigned_at).toLocaleString("en-GB", {
-                  day: "2-digit",
-                  month: "short",
-                  year: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hour12: true,
-                })}
-              </div>
-            </div>
-
-            {/* Driver details */}
-            {(selectedTask.driver_name || selectedTask.trip_details?.driver) && (
-              <div className="grid grid-cols-2 gap-1 text-[10px] border-t border-slate-800/60 pt-1">
-                <div className="text-slate-400">Driver:</div>
-                <div className="text-slate-200 text-right">
-                  {selectedTask.driver_name || selectedTask.trip_details?.driver}
-                </div>
-                {selectedTask.driver_phone && (
-                  <>
-                    <div className="text-slate-400">Contact:</div>
-                    <div className="text-slate-200 text-right font-mono text-[9px]">
-                      {selectedTask.driver_phone}
-                    </div>
-                  </>
-                )}
-                {selectedTask.driver_rating !== null &&
-                  selectedTask.driver_rating !== undefined &&
-                  selectedTask.driver_rating > 0 && (
-                    <>
-                      <div className="text-slate-400">Rating:</div>
-                      <div className="text-amber-400 text-right font-bold">
-                        {selectedTask.driver_rating.toFixed(1)} ★ (
-                        {selectedTask.driver_total_trips || 0} trips)
-                      </div>
-                    </>
-                  )}
-              </div>
-            )}
-
-            {/* Vehicle details */}
-            {(selectedTask.vehicle_plate || selectedTask.trip_details?.vehicle_plate) && (
-              <div className="grid grid-cols-2 gap-1 text-[10px] border-t border-slate-800/60 pt-1">
-                <div className="text-slate-400">Plate:</div>
-                <div className="text-slate-200 text-right font-mono">
-                  {selectedTask.vehicle_plate || selectedTask.trip_details?.vehicle_plate}
-                </div>
-                {selectedTask.vehicle_trailer_type && (
-                  <>
-                    <div className="text-slate-400">Trailer:</div>
-                    <div className="text-slate-200 text-right">
-                      {selectedTask.vehicle_trailer_type}
-                    </div>
-                  </>
-                )}
-                {selectedTask.vehicle_ownership && (
-                  <>
-                    <div className="text-slate-400">Ownership:</div>
-                    <div
-                      className={`text-right font-bold ${
-                        selectedTask.vehicle_ownership === "OWNED"
-                          ? "text-green-400"
-                          : "text-amber-400"
-                      }`}
-                    >
-                      {selectedTask.vehicle_ownership}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Inspector details */}
-            {selectedTask.inspector_name && (
-              <div className="border-t border-slate-800/60 pt-1 text-[10px] space-y-0.5">
-                <div className="flex items-center gap-1">
-                  <span className="text-slate-400">👷 Site Inspector:</span>
-                  <span className="text-slate-200 font-medium">
-                    {selectedTask.inspector_name}
-                  </span>
-                </div>
-                {selectedTask.inspector_phone && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-400">📞</span>
-                    <span className="text-slate-200 font-mono text-[9px]">
-                      {selectedTask.inspector_phone}
-                    </span>
-                  </div>
-                )}
-                {selectedTask.inspector_email && (
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-400">✉️</span>
-                    <span className="text-slate-200 text-[9px]">
-                      {selectedTask.inspector_email}
-                    </span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Site info */}
-            {selectedTask.site_name && (
-              <div className="grid grid-cols-2 gap-1 text-[10px] border-t border-slate-800/60 pt-1">
-                <div className="text-slate-400">Site:</div>
-                <div className="text-slate-200 text-right">
-                  {selectedTask.site_name}
-                </div>
-                {selectedTask.trip_details?.panels_count && (
-                  <>
-                    <div className="text-slate-400">Panels:</div>
-                    <div className="text-cyan-400 text-right font-bold">
-                      {selectedTask.trip_details.panels_count}
-                    </div>
-                  </>
-                )}
-              </div>
-            )}
-
-            {/* Multi-factory (dispatcher only) */}
-            {selectedTask.factories &&
-              selectedTask.factories.length > 1 &&
-              profile === "DISPATCHER" && (
-                <div className="mt-1 pt-1 border-t border-slate-800/40 space-y-1">
-                  <span className="text-[8px] text-purple-400 uppercase font-bold">
-                    🏭 Multi-Factory Sequence
-                  </span>
-                  {selectedTask.factories.map((f, idx) => (
-                    <div
-                      key={idx}
-                      className="flex justify-between text-[8px] bg-slate-900/50 px-1.5 py-1 rounded"
-                    >
-                      <span className="text-slate-400">
-                        Stage {f.loading_order}: {f.factory_name}
-                      </span>
-                      <span className="text-slate-300">
-                        {f.panels_count} panels
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-            {/* GPS status */}
-            {selectedTask.driver_status && (
-              <div className="grid grid-cols-2 gap-1 text-[10px] border-t border-slate-800/60 pt-1">
-                <div className="text-slate-400">🛰️ GPS:</div>
-                <div
-                  className={`text-right font-bold ${
-                    selectedTask.driver_status === "IN_TRANSIT"
-                      ? "text-amber-400"
-                      : selectedTask.driver_status === "AT_FACTORY"
-                      ? "text-blue-400"
-                      : selectedTask.driver_status === "ARRIVED"
-                      ? "text-green-400"
-                      : "text-slate-400"
-                  }`}
-                >
-                  {selectedTask.driver_status.replace("_", " ")}
-                </div>
-                {selectedTask.driver_current_lat &&
-                  selectedTask.driver_current_lng && (
-                    <>
-                      <div className="text-slate-400">Position:</div>
-                      <div className="text-slate-300 text-right font-mono text-[9px]">
-                        {selectedTask.driver_current_lat.toFixed(4)},{" "}
-                        {selectedTask.driver_current_lng.toFixed(4)}
-                      </div>
-                    </>
-                  )}
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="bg-slate-950 border border-slate-800/60 p-3 rounded-lg text-center animate-fade-in">
-            <div className="text-[10px] text-slate-500 italic">
-              👆 Select a task above to see full trip details
-            </div>
-          </div>
-        )}
-
+       
         {/* Component Selector - Only show if not FACTORY_ONLY */}
         {profile !== "DRIVER" && manifest.scope !== "FACTORY_ONLY" && (
           <div className="bg-slate-950 border border-slate-800/80 p-2.5 rounded-lg space-y-1.5 animate-fade-in">
@@ -1990,135 +1870,23 @@ onChange={(e) => {
             </select>
           </div>
         )}
-
-        {/* Free OpenStreetMap with Leaflet */}
-        {showGlobalMap && manifest.scope !== "FACTORY_ONLY" && (
-          <div className="bg-slate-950 border border-slate-800 rounded-lg p-2.5 animate-fade-in relative overflow-hidden">
-            <div className="flex justify-between items-center mb-1.5">
-              <span className="text-[8px] uppercase font-bold text-slate-500 tracking-wider">
-                📡 Live Route Monitor (OpenStreetMap) - FREE
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowTrafficOverlay(!showTrafficOverlay)}
-                  className={`text-[8px] px-2 py-0.5 rounded transition ${
-                    showTrafficOverlay ? "bg-amber-950/50 text-amber-400 border border-amber-500/30" : "bg-slate-800 text-slate-500"
-                  }`}
-                >
-                  {showTrafficOverlay ? "🟡 Traffic On" : "🔴 Traffic Off"}
-                </button>
-                {/* Traffic Check button now only for Inspector */}
-                {profile === "INSPECTOR" && (manifest.scope as string) !== "FACTORY_ONLY" && (
-                  <button
-                    onClick={checkTrafficCongestion}
-                    className="text-[8px] px-2 py-0.5 rounded bg-amber-950/50 text-amber-400 border border-amber-500/30 hover:bg-amber-900 transition"
-                  >
-                    🚦 Check Traffic
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="h-64 w-full rounded overflow-hidden border border-slate-700">
-              <MapContainer
-                center={mapPosition}
-                zoom={12}
-                style={{ height: '100%', width: '100%' }}
-                scrollWheelZoom={false}
-                ref={mapRef}
-              >
-                <TileLayer
-                  attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, &copy; <a href="https://carto.com/">CARTO</a>'
-                  url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
-                  subdomains={['a', 'b', 'c']}
-                />
-                {showTrafficOverlay && (
-                  <>
-                    <Polyline
-                      positions={ROUTE_COORDINATES.slice(4, 6)}
-                      pathOptions={{ color: 'red', weight: 6, opacity: 0.8 }}
-                    />
-                    <Polyline
-                      positions={ROUTE_COORDINATES.slice(2, 4)}
-                      pathOptions={{ color: 'orange', weight: 5, opacity: 0.8 }}
-                    />
-                    <Polyline
-                      positions={ROUTE_COORDINATES.slice(0, 2)}
-                      pathOptions={{ color: 'green', weight: 4, opacity: 0.7 }}
-                    />
-                    <Polyline
-                      positions={ROUTE_COORDINATES.slice(6, 9)}
-                      pathOptions={{ color: 'green', weight: 4, opacity: 0.7 }}
-                    />
-                  </>
-                )}
-                <Polyline
-                  positions={ROUTE_COORDINATES}
-                  pathOptions={{ color: '#06b6d4', weight: 3, opacity: 0.5, dashArray: '5, 5' }}
-                />
-                <Marker position={ROUTE_COORDINATES[0]}>
-                  <Popup>
-                    <div className="text-xs">
-                      <strong>📍 ICAD Industrial Zone</strong>
-                      <br />Origin Point
-                    </div>
-                  </Popup>
-                </Marker>
-                <Marker position={ROUTE_COORDINATES[ROUTE_COORDINATES.length - 1]}>
-                  <Popup>
-                    <div className="text-xs">
-                      <strong>🏗️ Yas Island Project</strong>
-                      <br />Destination
-                    </div>
-                  </Popup>
-                </Marker>
-                <Marker position={mapPosition}>
-                  <Popup>
-                    <div className="text-xs">
-                      <strong>🚚 Current Position</strong>
-                      <br />State: {currentAsset.state}
-                    </div>
-                  </Popup>
-                </Marker>
-              </MapContainer>
-            </div>
-            <div className="flex gap-4 mt-1.5 text-[8px] text-slate-400">
-              <span className="flex items-center gap-1">
-                <span className="w-3 h-0.5 bg-red-500 inline-block"></span> Heavy
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-3 h-0.5 bg-orange-500 inline-block"></span> Moderate
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-3 h-0.5 bg-green-500 inline-block"></span> Clear
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="w-3 h-0.5 border border-dashed border-cyan-400 inline-block"></span> Route
-              </span>
-            </div>
-            <div className="absolute bottom-1.5 right-1.5 bg-slate-900/90 border border-slate-800 p-1 rounded text-[6px] text-amber-500">
-              ⚠️ Traffic simulation - No API key required
-            </div>
-          </div>
-        )}
-
-        {/* Custody Ledger */}
+              {/* Custody Ledger */}
         <div className="bg-cyan-950/10 border border-cyan-900/20 p-2.5 rounded-lg text-xs space-y-1">
           <div className="flex justify-between items-center border-b border-slate-800/40 pb-1">
             <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">
               📍 Verification Custody Stamp:
             </span>
             <span className="text-cyan-400 font-bold uppercase bg-slate-950 px-2 py-0.5 rounded border border-cyan-800 text-[9px]">
-              {getAssetCustody(currentAsset.state)}
+              {getAssetCustody(currentAsset?.state)}
             </span>
           </div>
           <div className="space-y-1 max-h-20 overflow-y-auto pr-1 font-mono text-[9px] text-slate-400 scrollbar-thin">
             {currentAsset?.custodyHistory?.map((log, i) => (
               <div key={i} className="flex justify-between">
-                <span>[{log.timestamp}] {log.state}</span>
+                <span>[{log.timestamp || "—"}] {log.state}</span>
                 <span className="text-cyan-500">→ {log.custody}</span>
               </div>
             ))}
-            <div ref={ledgerEndRef} />
           </div>
         </div>
 
@@ -2150,11 +1918,11 @@ onChange={(e) => {
                 Asset serialization key:
               </span>
               <span className="font-mono font-bold text-slate-300 truncate block">
-                {profile === "INSPECTOR" && !currentAsset.hasScannedQR
+                {profile === "INSPECTOR" && !currentAsset?.hasScannedQR
                   ? "[SCAN REQUIRED]"
-                  : currentAsset.state === "INITIALIZED" && !currentAsset.hasScannedQR
+                  : currentAsset?.state === "INITIALIZED" && !currentAsset?.hasScannedQR
                   ? "[AWAITING SCAN SYNC]"
-                  : currentAsset.id}
+                  : currentAsset?.id}
               </span>
             </div>
             <div>
@@ -2163,29 +1931,29 @@ onChange={(e) => {
               </span>
               <span
                 className={`font-bold tracking-wide uppercase ${
-                  currentAsset.state.includes("REJECTED") ? "text-red-500" : "text-cyan-400"
+                  currentAsset?.state.includes("REJECTED") ? "text-red-500" : "text-cyan-400"
                 }`}
               >
-                {currentAsset.state}
+                {currentAsset?.state}
               </span>
             </div>
-            {currentAsset.hasScannedQR && currentAsset.metadata && (
+            {currentAsset?.hasScannedQR && currentAsset?.metadata && (
               <div className="col-span-2 grid grid-cols-4 gap-1.5 pt-2 mt-2 border-t border-slate-900 text-center animate-fade-in">
                 <div className="bg-slate-900/60 p-1 rounded border border-slate-800 text-[10px]">
                   <div className="text-[7px] text-slate-500 uppercase font-bold">Length</div>
-                  <div className="font-mono text-slate-300">{currentAsset.metadata.length_meters}m</div>
+                  <div className="font-mono text-slate-300">{currentAsset?.metadata.length_meters}m</div>
                 </div>
                 <div className="bg-slate-900/60 p-1 rounded border border-slate-800 text-[10px]">
                   <div className="text-[7px] text-slate-500 uppercase font-bold">Width</div>
-                  <div className="font-mono text-slate-300">{currentAsset.metadata.width_meters}m</div>
+                  <div className="font-mono text-slate-300">{currentAsset?.metadata.width_meters}m</div>
                 </div>
                 <div className="bg-slate-900/60 p-1 rounded border border-slate-800 text-[10px]">
                   <div className="text-[7px] text-slate-500 uppercase font-bold">Height</div>
-                  <div className="font-mono text-slate-300">{currentAsset.metadata.height_meters}m</div>
+                  <div className="font-mono text-slate-300">{currentAsset?.metadata.height_meters}m</div>
                 </div>
                 <div className="bg-slate-900/60 p-1 rounded border border-slate-800 text-[10px]">
                   <div className="text-[7px] text-slate-500 uppercase font-bold">Weight</div>
-                  <div className="font-mono text-amber-500 font-bold">{currentAsset.metadata.weight_tons}T</div>
+                  <div className="font-mono text-amber-500 font-bold">{currentAsset?.metadata.weight_tons}T</div>
                 </div>
               </div>
             )}
@@ -2201,7 +1969,13 @@ onChange={(e) => {
                 {manifest.manifest_group_id}
               </span>
             </div>
-            {profile === "INSPECTOR" && !currentAsset.hasScannedQR ? (
+                        <button
+              onClick={() => setShowDeliveryNote(true)}
+              className="w-full text-[10px] bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-400 py-1.5 rounded font-bold uppercase transition"
+            >
+              📋 View Delivery Note
+            </button>
+            {profile === "INSPECTOR" && !currentAsset?.hasScannedQR ? (
               <div className="col-span-2 py-1 bg-slate-900/40 border border-slate-800/80 rounded text-center text-[10px] text-slate-500 font-mono italic">
                 🔒 Engineering documents and EPD compliance locks hidden until target QR validation is executed.
               </div>
@@ -2209,15 +1983,15 @@ onChange={(e) => {
               <>
                 <div className="flex justify-between text-slate-400">
                   <span>EPD 1:</span>
-                  {currentAsset.epd1_certificate_url ? (
+                  {currentAsset?.epd1_certificate_url ? (
                     <a
-                      href={currentAsset.epd1_certificate_url}
+                      href={currentAsset?.epd1_certificate_url}
                       target="_blank"
                       rel="noreferrer"
                       className="text-cyan-400 underline font-bold text-[9px] truncate max-w-[120px]"
-                      title={currentAsset.epd1_file_name || currentAsset.epd1_certificate_url}
+                      title={currentAsset?.epd1_file_name || currentAsset?.epd1_certificate_url}
                     >
-                      📄 {currentAsset.epd1_file_name || 'Document'} ↗
+                      📄 {currentAsset?.epd1_file_name || 'Document'} ↗
                     </a>
                   ) : (
                     <span className="text-amber-500 font-medium italic">NOT_UPLOADED</span>
@@ -2225,45 +1999,45 @@ onChange={(e) => {
                 </div>
                 <div className="flex justify-between text-slate-400">
                   <span>Mix Design 1:</span>
-                  {currentAsset.mix1_certificate_url ? (
+                  {currentAsset?.mix1_certificate_url ? (
                     <a
-                      href={currentAsset.mix1_certificate_url}
+                      href={currentAsset?.mix1_certificate_url}
                       target="_blank"
                       rel="noreferrer"
                       className="text-cyan-400 underline font-bold text-[9px] truncate max-w-[120px]"
-                      title={currentAsset.mix1_file_name || currentAsset.mix1_certificate_url}
+                      title={currentAsset?.mix1_file_name || currentAsset?.mix1_certificate_url}
                     >
-                      📄 {currentAsset.mix1_file_name || 'Document'} ↗
+                      📄 {currentAsset?.mix1_file_name || 'Document'} ↗
                     </a>
                   ) : (
                     <span className="text-amber-500 font-medium italic">NOT_UPLOADED</span>
                   )}
                 </div>
-                {currentAsset.epd2_certificate_url && (
+                {currentAsset?.epd2_certificate_url && (
                   <div className="flex justify-between text-slate-400">
                     <span>EPD 2:</span>
                     <a
-                      href={currentAsset.epd2_certificate_url}
+                      href={currentAsset?.epd2_certificate_url}
                       target="_blank"
                       rel="noreferrer"
                       className="text-cyan-400 underline font-bold text-[9px] truncate max-w-[120px]"
-                      title={currentAsset.epd2_file_name || currentAsset.epd2_certificate_url}
+                      title={currentAsset?.epd2_file_name || currentAsset?.epd2_certificate_url}
                     >
-                      📄 {currentAsset.epd2_file_name || 'Document'} ↗
+                      📄 {currentAsset?.epd2_file_name || 'Document'} ↗
                     </a>
                   </div>
                 )}
-                {currentAsset.mix2_certificate_url && (
+                {currentAsset?.mix2_certificate_url && (
                   <div className="flex justify-between text-slate-400">
                     <span>Mix Design 2:</span>
                     <a
-                      href={currentAsset.mix2_certificate_url}
+                      href={currentAsset?.mix2_certificate_url}
                       target="_blank"
                       rel="noreferrer"
                       className="text-cyan-400 underline font-bold text-[9px] truncate max-w-[120px]"
-                      title={currentAsset.mix2_file_name || currentAsset.mix2_certificate_url}
+                      title={currentAsset?.mix2_file_name || currentAsset?.mix2_certificate_url}
                     >
-                      📄 {currentAsset.mix2_file_name || 'Document'} ↗
+                      📄 {currentAsset?.mix2_file_name || 'Document'} ↗
                     </a>
                   </div>
                 )}
@@ -2281,10 +2055,10 @@ onChange={(e) => {
                     </a>
                   </div>
                 )}
-                {!currentAsset.epd1_certificate_url && 
-                 !currentAsset.mix1_certificate_url && 
-                 !currentAsset.epd2_certificate_url && 
-                 !currentAsset.mix2_certificate_url &&
+                {!currentAsset?.epd1_certificate_url && 
+                 !currentAsset?.mix1_certificate_url && 
+                 !currentAsset?.epd2_certificate_url && 
+                 !currentAsset?.mix2_certificate_url &&
                  !manifest.delivery_note_url && (
                   <div className="text-[9px] text-slate-500 italic text-center">
                     No documents uploaded (all optional)
@@ -2297,22 +2071,22 @@ onChange={(e) => {
               <div>
                 PLANT SLA:
                 <span className="text-slate-300 font-bold block">{getPlantSLA()}m</span>
-                {currentAsset.factory_delay_minutes > 0 && (
-                  <span className="text-red-400 text-[7px]">(+{currentAsset.factory_delay_minutes}m delays)</span>
+                {(currentAsset?.factory_delay_minutes || 0) > 0 && (
+                  <span className="text-red-400 text-[7px]">(+{currentAsset?.factory_delay_minutes}m delays)</span>
                 )}
               </div>
               <div>
                 TRANSIT SLA:
                 <span className="text-amber-500 font-bold block">{getTransitSLA()}m</span>
-                {currentAsset.transit_delay_minutes > 0 && (
-                  <span className="text-red-400 text-[7px]">(+{currentAsset.transit_delay_minutes}m delays)</span>
+                {(currentAsset?.transit_delay_minutes || 0) > 0 && (
+                  <span className="text-red-400 text-[7px]">(+{currentAsset?.transit_delay_minutes}m delays)</span>
                 )}
               </div>
               <div>
                 SITE SLA:
                 <span className="text-blue-400 font-bold block">{getSiteSLA()}m</span>
-                {currentAsset.site_delay_minutes > 0 && (
-                  <span className="text-red-400 text-[7px]">(+{currentAsset.site_delay_minutes}m delays)</span>
+                {(currentAsset?.site_delay_minutes || 0) > 0 && (
+                  <span className="text-red-400 text-[7px]">(+{currentAsset?.site_delay_minutes}m delays)</span>
                 )}
               </div>
             </div>
@@ -2340,7 +2114,7 @@ onChange={(e) => {
         )}
 
         {/* Trip Complete Message Based on Scope */}
-        {isTripComplete() && (
+        {selectedTask && assets.length > 0 && isTripComplete() && (
           <div className="bg-green-950/20 border border-green-900/40 p-2 rounded-lg text-center">
             <span className="text-green-400 font-bold text-xs block">
               {getScopeStatusMessage()}
@@ -2354,14 +2128,14 @@ onChange={(e) => {
         {/* Action panels - Conditional based on scope */}
         <div className="border-t border-slate-800/80 pt-1.5">
           {/* DRIVER NODE - FIXED */}
-          {profile === "DRIVER" && manifest.scope !== "FACTORY_ONLY" && (
+          {profile === "DRIVER" && manifest.scope !== "FACTORY_ONLY" && selectedTask && (
             <div className="space-y-3 animate-fade-in">
               {!isTripComplete() ? (
                 <>
                   <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold mb-2">
                     Available System Actions:
                   </span>
-                  {!currentAsset.state.includes("REJECTED") && (
+                  {!currentAsset?.state.includes("REJECTED") && (
                     <div className="space-y-2">
                       <div className="bg-slate-950 p-2 border border-slate-800 rounded-lg">
                         <span className="block text-[8px] text-slate-500 uppercase font-bold mb-1">
@@ -2379,33 +2153,38 @@ onChange={(e) => {
                       <div className="flex gap-2">
                         <button
                           onClick={() => {
-                            if (currentAsset.state.startsWith("DISPATCHED")) {
+                            if (currentAsset?.state.startsWith("DISPATCHED")) {
                               transitionAllAssets("ARRIVED_AT_GATE");
                             }
                           }}
-                          disabled={!currentAsset.state.startsWith("DISPATCHED")}
+                          disabled={!currentAsset?.state.startsWith("DISPATCHED")}
                           className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold p-2.5 rounded text-xs uppercase disabled:opacity-30 disabled:pointer-events-none transition"
                         >
                           {getDriverButtonText()}
                         </button>
                         <button
-                          onClick={() => {
+                                                    onClick={() => {
                             const customLogState = selectedDelayReason
                               ? `TRANSIT_DELAY_(${selectedDelayReason.toUpperCase().replace(/\s+/g, '_')})`
                               : "TRANSIT_DELAY";
-                            setAssets(prev =>
-                              prev.map(a => ({
-                                ...a,
-                                transit_delay_minutes: (a.transit_delay_minutes || 0) + 15,
-                                delay_reason: selectedDelayReason,
-                                custodyHistory: [
-                                  ...a.custodyHistory,
-                                  { timestamp: getFormattedTimestamp(), state: customLogState, custody: "TRANSIT LOGISTICS (Driver)" }
-                                ]
-                              }))
-                            );
+                            setAssets(prev => {
+                              const newAssets = prev.map(a => {
+                                const updated = {
+                                  ...a,
+                                  transit_delay_minutes: (a.transit_delay_minutes || 0) + 15,
+                                  delay_reason: selectedDelayReason,
+                                  custodyHistory: [
+                                    ...a.custodyHistory,
+                                    { timestamp: getFormattedTimestamp(), state: customLogState, custody: "TRANSIT LOGISTICS (Driver)" }
+                                  ]
+                                };
+                                saveAssetState(updated.id, updated);
+                                return updated;
+                              });
+                              return newAssets;
+                            });
                           }}
-                          disabled={!currentAsset.state.startsWith("DISPATCHED") || !selectedDelayReason}
+                          disabled={!currentAsset?.state.startsWith("DISPATCHED") || !selectedDelayReason}
                           className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-3 rounded text-xs uppercase disabled:opacity-30 disabled:pointer-events-none transition"
                         >
                           ⚠ Log Delay (+15m)
@@ -2424,37 +2203,37 @@ onChange={(e) => {
                   <span className="text-xs text-cyan-400 font-bold block uppercase tracking-wider">
                     🚚 Your delivery task is complete!
                   </span>
-                  <button
-                    onClick={() => {
-                      setProfile("DISPATCHER");
-                    }}
-                    className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 py-1.5 rounded text-xs font-bold uppercase transition"
-                  >
-                    🚀 Go to Dispatcher to Create New Trip
-                  </button>
+<button
+  onClick={() => {
+    setSelectedTask(null);
+  }}
+  className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 py-1.5 rounded text-xs font-bold uppercase transition"
+>
+  ✅ Return to My Tasks
+</button>
                 </div>
               )}
             </div>
           )}
 
-          {/* INSPECTOR NODE */}
-          {profile === "INSPECTOR" && manifest.scope === "FULL" && (
+                    {/* INSPECTOR NODE */}
+          {profile === "INSPECTOR" && manifest.scope === "FULL" && selectedTask && (
             <div className="space-y-3 animate-fade-in">
               <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold mb-2">
                 Available System Actions:
               </span>
-              {!currentAsset.state.includes("REJECTED") ? (
+              {!currentAsset?.state.includes("REJECTED") ? (
                 <div className="space-y-3">
                   <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg text-xs space-y-1.5">
                     <label className="flex items-center space-x-2 cursor-pointer text-slate-300">
                       <input
                         type="checkbox"
                         checked={checkedEPD}
-                        disabled={currentAsset.state === "INSTALLATION_COMPLETED" || !currentAsset.hasScannedQR}
+                        disabled={currentAsset?.state === "INSTALLATION_COMPLETED" || !currentAsset?.hasScannedQR}
                         onChange={(e) => setCheckedEPD(e.target.checked)}
                         className="rounded accent-cyan-500 disabled:opacity-30"
                       />
-                      <span className={!currentAsset.hasScannedQR ? "text-slate-600 italic" : ""}>
+                      <span className={!currentAsset?.hasScannedQR ? "text-slate-600 italic" : ""}>
                         Verify Twin Life Cycle Assessment (LCA / EPD Compliance)
                       </span>
                     </label>
@@ -2462,11 +2241,11 @@ onChange={(e) => {
                       <input
                         type="checkbox"
                         checked={checkedMixDesign}
-                        disabled={currentAsset.state === "INSTALLATION_COMPLETED" || !currentAsset.hasScannedQR}
+                        disabled={currentAsset?.state === "INSTALLATION_COMPLETED" || !currentAsset?.hasScannedQR}
                         onChange={(e) => setCheckedMixDesign(e.target.checked)}
                         className="rounded accent-cyan-500 disabled:opacity-30"
                       />
-                      <span className={!currentAsset.hasScannedQR ? "text-slate-600 italic" : ""}>
+                      <span className={!currentAsset?.hasScannedQR ? "text-slate-600 italic" : ""}>
                         Verify High-Performance Structural Mix Design Specs
                       </span>
                     </label>
@@ -2475,12 +2254,12 @@ onChange={(e) => {
                       <input
                         type="checkbox"
                         checked={checkedDeliveryNote}
-                        disabled={currentAsset.state === "INSTALLATION_COMPLETED" || !currentAsset.hasScannedQR || !manifest.delivery_note_url}
+                        disabled={currentAsset?.state === "INSTALLATION_COMPLETED" || !currentAsset?.hasScannedQR || !manifest.delivery_note_url}
                         onChange={(e) => setCheckedDeliveryNote(e.target.checked)}
                         className="rounded accent-cyan-500 disabled:opacity-30"
                       />
                       <span className={
-                        !currentAsset.hasScannedQR ? "text-slate-600 italic" :
+                        !currentAsset?.hasScannedQR ? "text-slate-600 italic" :
                         !manifest.delivery_note_url ? "text-amber-500 italic" :
                         ""
                       }>
@@ -2539,7 +2318,7 @@ onChange={(e) => {
 
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2">
-                      {(currentAsset.state === "ARRIVED_AT_GATE" || currentAsset.state === "DISPATCHED") && (
+                      {(currentAsset?.state === "ARRIVED_AT_GATE" || currentAsset?.state === "DISPATCHED") && (
                         <button
                           onClick={() => {
                             const defectLabel = selectedInspectorDefect === "No Defects"
@@ -2553,17 +2332,17 @@ onChange={(e) => {
                           📋 RECEIVED+APPROVED: {selectedInspectorDefect.toUpperCase()}
                         </button>
                       )}
-                      {(currentAsset.state.startsWith("RECEIVED_ON_SITE") ||
-                        currentAsset.state === "GATE_IN_OFFLOADING" ||
-                        currentAsset.state === "OFFLOADING_COMPLETED" ||
-                        currentAsset.state === "INSTALLATION_INITIATED") && (
+                      {(currentAsset?.state.startsWith("RECEIVED_ON_SITE") ||
+                        currentAsset?.state === "GATE_IN_OFFLOADING" ||
+                        currentAsset?.state === "OFFLOADING_COMPLETED" ||
+                        currentAsset?.state === "INSTALLATION_INITIATED") && (
                         <button
                           onClick={() => {
                             const nextState = (() => {
-                              if (currentAsset.state.startsWith("RECEIVED_ON_SITE")) return "GATE_IN_OFFLOADING";
-                              if (currentAsset.state === "GATE_IN_OFFLOADING") return "OFFLOADING_COMPLETED";
-                              if (currentAsset.state === "OFFLOADING_COMPLETED") return "INSTALLATION_INITIATED";
-                              if (currentAsset.state === "INSTALLATION_INITIATED") return "INSTALLATION_COMPLETED";
+                              if (currentAsset?.state.startsWith("RECEIVED_ON_SITE")) return "GATE_IN_OFFLOADING";
+                              if (currentAsset?.state === "GATE_IN_OFFLOADING") return "OFFLOADING_COMPLETED";
+                              if (currentAsset?.state === "OFFLOADING_COMPLETED") return "INSTALLATION_INITIATED";
+                              if (currentAsset?.state === "INSTALLATION_INITIATED") return "INSTALLATION_COMPLETED";
                               return null;
                             })();
                             if (nextState) {
@@ -2575,23 +2354,23 @@ onChange={(e) => {
                             }
                           }}
                           disabled={
-                            (currentAsset.state === "OFFLOADING_COMPLETED" || currentAsset.state === "INSTALLATION_INITIATED") &&
+                            (currentAsset?.state === "OFFLOADING_COMPLETED" || currentAsset?.state === "INSTALLATION_INITIATED") &&
                             !manifest.geofence_verified
                           }
                           className="col-span-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold p-2.5 rounded text-xs uppercase tracking-wider transition disabled:opacity-30 disabled:pointer-events-none"
                         >
-                          {currentAsset.state.startsWith("RECEIVED_ON_SITE") && "🔄 INITIATE OFFLOADING"}
-                          {currentAsset.state === "GATE_IN_OFFLOADING" && "✅ COMPLETE OFFLOADING"}
-                          {currentAsset.state === "OFFLOADING_COMPLETED" && "🏗️ INITIATE INSTALLATION"}
-                          {currentAsset.state === "INSTALLATION_INITIATED" && "✅ COMPLETE INSTALLATION"}
+                          {currentAsset?.state.startsWith("RECEIVED_ON_SITE") && "🔄 INITIATE OFFLOADING"}
+                          {currentAsset?.state === "GATE_IN_OFFLOADING" && "✅ COMPLETE OFFLOADING"}
+                          {currentAsset?.state === "OFFLOADING_COMPLETED" && "🏗️ INITIATE INSTALLATION"}
+                          {currentAsset?.state === "INSTALLATION_INITIATED" && "✅ COMPLETE INSTALLATION"}
                         </button>
                       )}
                     </div>
 
                     <div className="grid grid-cols-3 gap-2">
-                      {(currentAsset.state === "ARRIVED_AT_GATE" ||
-                        currentAsset.state.startsWith("RECEIVED_ON_SITE") ||
-                        currentAsset.state === "GATE_IN_OFFLOADING") && (
+                      {(currentAsset?.state === "ARRIVED_AT_GATE" ||
+                        currentAsset?.state.startsWith("RECEIVED_ON_SITE") ||
+                        currentAsset?.state === "GATE_IN_OFFLOADING") && (
                         <button
                           onClick={() =>
                             transitionTo(
@@ -2606,7 +2385,7 @@ onChange={(e) => {
                           Gate Reject
                         </button>
                       )}
-                      {currentAsset.state === "INSTALLATION_INITIATED" && (
+                      {currentAsset?.state === "INSTALLATION_INITIATED" && (
                         <button
                           onClick={() =>
                             transitionTo(
@@ -2635,7 +2414,7 @@ onChange={(e) => {
                     )}
 
                     {/* RATING SECTION */}
-                    {currentAsset.state === "INSTALLATION_COMPLETED" && !manifest.inspectorRating && (
+                    {currentAsset?.state === "INSTALLATION_COMPLETED" && !manifest.inspectorRating && (
                       <div className="bg-slate-950 p-2.5 border border-slate-700 rounded-lg space-y-2">
                         <span className="block text-[8px] text-slate-400 uppercase font-bold">
                           ⭐ Rate Driver: {manifest.driver.name}
@@ -2672,7 +2451,7 @@ onChange={(e) => {
               ) : (
                 <div className="p-2.5 bg-red-950/20 border border-red-900/40 rounded-lg text-center">
                   <span className="text-xs text-red-400 block mb-2 font-mono">
-                    Focused Component Flag Status: {currentAsset.state}
+                    Focused Component Flag Status: {currentAsset?.state}
                   </span>
                   <button
                     onClick={() =>
@@ -2885,6 +2664,25 @@ onChange={(e) => {
           </div>
         )}
       </div>
+              {/* Delivery Note Modal */}
+        <DeliveryNoteModal
+          isOpen={showDeliveryNote}
+          onClose={() => setShowDeliveryNote(false)}
+          manifestId={manifest.manifest_group_id}
+          driverName={manifest.driver.name}
+          driverPhone={manifest.driver.phone}
+          vehiclePlate={manifest.vehicle.plateNumber}
+          vehicleTrailerType={manifest.vehicle.trailerType}
+          siteName={selectedTask?.site_name || "Project Site"}
+          siteAddress={selectedTask?.site_name || "Abu Dhabi, UAE"}
+          inspectorName={manifest.siteInspector.name}
+          inspectorPhone={manifest.siteInspector.phone}
+          orderDetails={
+            (selectedTask as any)?.order_details || []
+          }
+          assignedAt={selectedTask?.assigned_at}
+          factory={selectedTask?.factories?.[0]?.factory_name || null}
+        />
     </div>
   );
 }

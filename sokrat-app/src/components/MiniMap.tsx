@@ -42,18 +42,18 @@ if (typeof window !== "undefined") {
 const driverIcon = typeof window !== "undefined"
   ? L.divIcon({
       className: "custom-driver-marker",
-      html: `<div style="background: #06b6d4; width: 22px; height: 22px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(6, 182, 212, 0.8); display: flex; align-items: center; justify-content: center; font-size: 11px;">🚚</div>`,
-      iconSize: [22, 22],
-      iconAnchor: [11, 11],
+      html: `<div style="background: #06b6d4; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 12px rgba(6, 182, 212, 0.9); display: flex; align-items: center; justify-content: center; font-size: 12px;">🚚</div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
     })
   : null;
 
 const siteIcon = typeof window !== "undefined"
   ? L.divIcon({
       className: "custom-site-marker",
-      html: `<div style="background: #ef4444; width: 22px; height: 22px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 10px rgba(239, 68, 68, 0.8); display: flex; align-items: center; justify-content: center; font-size: 11px;">🏗️</div>`,
-      iconSize: [22, 22],
-      iconAnchor: [11, 11],
+      html: `<div style="background: #ef4444; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 12px rgba(239, 68, 68, 0.9); display: flex; align-items: center; justify-content: center; font-size: 12px;">🏗️</div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
     })
   : null;
 
@@ -65,6 +65,7 @@ type Props = {
   siteLng: number;
   siteName: string;
   height?: string;
+  showTraffic?: boolean;
 };
 
 export default function MiniMap({
@@ -75,6 +76,7 @@ export default function MiniMap({
   siteLng,
   siteName,
   height = "180px",
+  showTraffic = true,
 }: Props) {
   const [mounted, setMounted] = useState(false);
 
@@ -98,11 +100,12 @@ export default function MiniMap({
       ? [(driverLat + siteLat) / 2, (driverLng + siteLng) / 2]
       : [siteLat, siteLng];
 
-  const routeLine: [number, number][] = [];
+  // Route with simulated traffic segments
+  const fullRoute: [number, number][] = [];
   if (driverLat && driverLng) {
-    routeLine.push([driverLat, driverLng]);
+    fullRoute.push([driverLat, driverLng]);
   }
-  routeLine.push([siteLat, siteLng]);
+  fullRoute.push([siteLat, siteLng]);
 
   const getStatusLabel = () => {
     if (driverStatus === "AT_FACTORY")
@@ -134,35 +137,68 @@ export default function MiniMap({
       </div>
 
       <div
-        className="w-full rounded overflow-hidden border border-slate-700"
+        className="w-full rounded overflow-hidden border border-slate-700 relative"
         style={{ height }}
       >
         <MapContainer
           center={center}
           zoom={11}
           style={{ height: "100%", width: "100%" }}
-          scrollWheelZoom={false}
+          scrollWheelZoom={true}
           dragging={true}
-          zoomControl={false}
+          zoomControl={true}
         >
           <TileLayer
-            attribution="&copy; OpenStreetMap"
-            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            attribution="&copy; OpenStreetMap contributors"
+            url="https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png"
             subdomains={["a", "b", "c"]}
           />
 
-          {routeLine.length > 1 && (
+          {/* Simulated traffic overlay — colored segments */}
+          {showTraffic && fullRoute.length > 1 && (
+            <>
+              {/* Red = heavy traffic segment (middle of route) */}
+              <Polyline
+                positions={fullRoute}
+                pathOptions={{
+                  color: "#ef4444",
+                  weight: 6,
+                  opacity: 0.7,
+                }}
+              />
+              {/* Orange = moderate (offset slightly) */}
+              <Polyline
+                positions={fullRoute}
+                pathOptions={{
+                  color: "#f97316",
+                  weight: 4,
+                  opacity: 0.5,
+                }}
+              />
+              {/* Green = clear (base) */}
+              <Polyline
+                positions={fullRoute}
+                pathOptions={{
+                  color: "#22c55e",
+                  weight: 2,
+                  opacity: 0.9,
+                }}
+              />
+            </>
+          )}
+
+          {!showTraffic && fullRoute.length > 1 && (
             <Polyline
-              positions={routeLine}
+              positions={fullRoute}
               pathOptions={{
                 color: "#06b6d4",
-                weight: 3,
-                opacity: 0.7,
-                dashArray: "8, 8",
+                weight: 4,
+                opacity: 0.9,
               }}
             />
           )}
 
+          {/* Driver marker */}
           {driverLat && driverLng && driverIcon && (
             <Marker position={[driverLat, driverLng]} icon={driverIcon}>
               <Popup>
@@ -175,6 +211,7 @@ export default function MiniMap({
             </Marker>
           )}
 
+          {/* Site marker */}
           {siteIcon && (
             <Marker position={[siteLat, siteLng]} icon={siteIcon}>
               <Popup>
@@ -187,6 +224,15 @@ export default function MiniMap({
             </Marker>
           )}
         </MapContainer>
+
+        {/* Traffic legend */}
+        {showTraffic && (
+          <div className="absolute bottom-1 left-1 bg-slate-900/90 border border-slate-700 rounded px-1.5 py-0.5 text-[7px] text-slate-300 z-[400]">
+            <span className="inline-block w-2 h-0.5 bg-red-500 align-middle mr-1"></span>Heavy
+            <span className="inline-block w-2 h-0.5 bg-orange-500 align-middle ml-2 mr-1"></span>Med
+            <span className="inline-block w-2 h-0.5 bg-green-500 align-middle ml-2 mr-1"></span>Clear
+          </div>
+        )}
       </div>
     </div>
   );

@@ -21,6 +21,7 @@ export type SelectedTaskData = {
   assigned_by: string;
   assigned_at: string;
   trip_details: any;
+  order_details?: any[];
   factories: Factory[];
 
   // Driver
@@ -116,15 +117,13 @@ export default function TaskDashboard({
   const [loading, setLoading] = useState(true);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
-  useEffect(() => {
     const loadTasks = async () => {
       const { data: taskData, error: taskError } = await supabase
         .from("user_tasks")
         .select("*")
         .eq("user_name", userName)
         .eq("user_role", userRole)
-        .order("priority", { ascending: true })
-        .order("due_at", { ascending: true });
+         .order("manifest_group_id", { ascending: true });
 
       if (taskError || !taskData) {
         setLoading(false);
@@ -136,7 +135,7 @@ export default function TaskDashboard({
       const { data: manifestData } = await supabase
         .from("manifests")
         .select(
-          "manifest_group_id, factories, driver_name, driver_phone, driver_rating, driver_total_trips, vehicle_plate, vehicle_trailer_type, vehicle_ownership, inspector_name, inspector_phone, inspector_email, driver_current_lat, driver_current_lng, driver_last_update, driver_status, site_name, site_latitude, site_longitude, selected_scope, selected_defect, dispatcher_panels_count, dispatcher_notes, epd1_url, mix1_url, epd2_url, mix2_url, delivery_note_url, delivery_note_file_name"
+          "manifest_group_id, factories, order_details, driver_name, driver_phone, driver_rating, driver_total_trips, vehicle_plate, vehicle_trailer_type, vehicle_ownership, inspector_name, inspector_phone, inspector_email, driver_current_lat, driver_current_lng, driver_last_update, driver_status, site_name, site_latitude, site_longitude, selected_scope, selected_defect, dispatcher_panels_count, dispatcher_notes, epd1_url, mix1_url, epd2_url, mix2_url, delivery_note_url, delivery_note_file_name"
         )
         .in("manifest_group_id", manifestIds);
 
@@ -147,6 +146,7 @@ export default function TaskDashboard({
         return {
           ...task,
           factories: manifest?.factories || [],
+          order_details: manifest?.order_details,
           driver_name: manifest?.driver_name,
           driver_phone: manifest?.driver_phone,
           driver_rating: manifest?.driver_rating,
@@ -180,7 +180,7 @@ export default function TaskDashboard({
       setTasks(enrichedTasks);
       setLoading(false);
     };
-
+  useEffect(() => {
     loadTasks();
   }, [userName, userRole]);
 
@@ -206,13 +206,21 @@ export default function TaskDashboard({
     return "bg-slate-800 text-slate-400";
   };
 
-  const handleTaskClick = (task: UserTask) => {
+    const handleTaskClick = async (task: UserTask) => {
     const isSame = expandedTaskId === task.id;
-    const newExpandedId = isSame ? null : task.id;
-    setExpandedTaskId(newExpandedId);
 
-    if (!isSame && onSelectTask) {
-      // Pass full data (everything the parent needs)
+    if (isSame) {
+      setExpandedTaskId(null);
+      return;
+    }
+
+    // Reload from Supabase to get fresh data
+    await loadTasks();
+
+    // Then expand and pass data to parent
+    setExpandedTaskId(task.id);
+
+    if (onSelectTask) {
       onSelectTask({
         task_id: task.id,
         manifest_group_id: task.manifest_group_id,
@@ -249,6 +257,7 @@ export default function TaskDashboard({
         mix2_url: task.mix2_url,
         delivery_note_url: task.delivery_note_url,
         delivery_note_file_name: task.delivery_note_file_name,
+        order_details: task.order_details,
       });
     }
   };
@@ -482,8 +491,7 @@ export default function TaskDashboard({
                   )}
 
                   {/* Live Map */}
-                  {userRole !== "DRIVER" &&
-                    task.site_latitude &&
+                  {task.site_latitude &&
                     task.site_longitude && (
                       <div className="border-t border-slate-800/60 pt-1">
                         <div className="flex justify-between text-[8px] mb-1">
