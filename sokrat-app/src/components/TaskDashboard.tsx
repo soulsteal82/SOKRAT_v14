@@ -139,7 +139,18 @@ export default function TaskDashboard({
           "manifest_group_id, factories, order_details, driver_name, driver_phone, driver_rating, driver_total_trips, vehicle_plate, vehicle_trailer_type, vehicle_ownership, inspector_name, inspector_phone, inspector_email, driver_current_lat, driver_current_lng, driver_last_update, driver_status, site_name, site_latitude, site_longitude, selected_scope, selected_defect, dispatcher_panels_count, dispatcher_notes, epd1_url, mix1_url, epd2_url, mix2_url, delivery_note_url, delivery_note_file_name"
         )
         .in("manifest_group_id", manifestIds);
+            // Also fetch live driver ratings
+    const driverNames = [...new Set(taskData.map(t => t.driver_name).filter(Boolean))];
+    const { data: driverData } = await supabase
+      .from("drivers")
+      .select("name, rating, total_trips")
+      .in("name", driverNames);
 
+    const getDriverRating = (driverName: string | null | undefined) => {
+      if (!driverName) return null;
+      const driver = driverData?.find((d) => d.name === driverName);
+      return driver;
+    };
       const enrichedTasks = taskData.map((task) => {
         const manifest = manifestData?.find(
           (m) => m.manifest_group_id === task.manifest_group_id
@@ -150,8 +161,8 @@ export default function TaskDashboard({
           order_details: manifest?.order_details,
           driver_name: manifest?.driver_name,
           driver_phone: manifest?.driver_phone,
-          driver_rating: manifest?.driver_rating,
-          driver_total_trips: manifest?.driver_total_trips,
+          driver_rating: getDriverRating(manifest?.driver_name)?.rating ?? manifest?.driver_rating,
+          driver_total_trips: getDriverRating(manifest?.driver_name)?.total_trips ?? manifest?.driver_total_trips,
           vehicle_plate: manifest?.vehicle_plate,
           vehicle_trailer_type: manifest?.vehicle_trailer_type,
           vehicle_ownership: manifest?.vehicle_ownership,
@@ -411,16 +422,16 @@ export default function TaskDashboard({
                   {/* Inspector details */}
                   {task.inspector_name && (
                     <div className="border-t border-slate-800/60 pt-1 text-[9px] space-y-0.5">
-                      <div className="flex items-center gap-1">
+                      <div className="grid grid-cols-2 gap-1">
                         <span className="text-slate-500">👷 Inspector:</span>
-                        <span className="text-slate-200">
+                        <span className="text-slate-200 text-right">
                           {task.inspector_name}
                         </span>
                       </div>
                       {task.inspector_phone && (
-                        <div className="flex items-center gap-1">
-                          <span className="text-slate-500">📞</span>
-                          <span className="text-slate-200 font-mono text-[8px]">
+                        <div className="grid grid-cols-2 gap-1">
+                          <span className="text-slate-500">📞 Phone:</span>
+                          <span className="text-slate-200 text-right font-mono text-[8px]">
                             {task.inspector_phone}
                           </span>
                         </div>

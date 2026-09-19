@@ -786,31 +786,50 @@ const currentAsset = assets.length > 0
     setError(null);
   };
 
-  const submitRating = () => {
+  const submitRating = async () => {
     if (ratingScore === 0) {
       setError("Please select a rating");
       return;
     }
+
+    const result = await submitRatingToSupabase(
+      manifest.driver.name,
+      ratingScore,
+      ratingComment,
+      manifest.manifest_group_id
+    );
+
+    if (!result.success) {
+      setError("Failed to submit rating: " + result.error);
+      return;
+    }
+
     const ratingData = {
       score: ratingScore,
       comment: ratingComment || undefined,
-      timestamp: getFormattedTimestamp()
+      timestamp: getFormattedTimestamp(),
     };
-    setManifest(prev => ({
+
+    setManifest((prev) => ({
       ...prev,
       inspectorRating: ratingData,
       driver: {
         ...prev.driver,
-        rating: prev.driver.rating > 0
-          ? ((prev.driver.rating * prev.driver.totalTrips + ratingScore) / (prev.driver.totalTrips + 1))
-          : ratingScore,
-        totalTrips: prev.driver.totalTrips + 1
-      }
+        rating: result.newRating || prev.driver.rating,
+        totalTrips: result.newTotalTrips || prev.driver.totalTrips,
+      },
     }));
+
     setRatingScore(0);
     setRatingComment("");
     setError(null);
-    alert("✅ Rating submitted successfully!");
+
+    alert(
+      `✅ Rating submitted!\n\n` +
+      `⭐ Your rating: ${ratingScore} ★\n` +
+      `📊 New average: ${result.newRating?.toFixed(2)} ★\n` +
+      `🚚 Total trips for ${manifest.driver.name}: ${result.newTotalTrips}`
+    );
   };
 
   function handleRebuildCustomBatch() {
@@ -1251,6 +1270,65 @@ const allowed = validTransitions[currentAsset?.state || ""] || [];
 
     if (error) {
       console.error("Failed to save task state:", error);
+    }
+  };
+    // ============================================
+  // Save a rating submission and update driver aggregate
+  // ============================================
+  const submitRatingToSupabase = async (
+    driverName: string,
+    score: number,
+    comment: string,
+    manifestGroupId: string
+  ) => {
+    try {
+      // 1. Save the rating to the current manifest
+      const { error: manifestError } = await supabase
+        .from("manifests")
+        .update({
+          inspector_rating_score: score,
+          inspector_rating_comment: comment || null,
+          inspector_rating_timestamp: new Date().toISOString(),
+        })
+        .eq("manifest_group_id", manifestGroupId);
+
+      if (manifestError) throw manifestError;
+
+      // 2. Fetch the driver's current stats
+      const { data: driverData, error: driverError } = await supabase
+        .from("drivers")
+        .select("id, rating, total_trips, total_rating_sum")
+        .eq("name", driverName)
+        .single();
+
+      if (driverError) throw driverError;
+
+      // 3. Calculate new aggregate
+      const newTotalTrips = (driverData.total_trips || 0) + 1;
+      const newRatingSum = (driverData.total_rating_sum || 0) + score;
+      const newAverageRating = newRatingSum / newTotalTrips;
+
+      // 4. Update the driver record
+      const { error: updateError } = await supabase
+        .from("drivers")
+        .update({
+          rating: parseFloat(newAverageRating.toFixed(2)),
+          total_trips: newTotalTrips,
+          total_rating_sum: newRatingSum,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", driverData.id);
+
+      if (updateError) throw updateError;
+
+      console.log(
+        `[RATING] Driver ${driverName}: ${score}★ → new avg ${newAverageRating.toFixed(2)}★ (${newTotalTrips} trips)`
+      );
+
+      return { success: true, newRating: newAverageRating, newTotalTrips };
+    } catch (err: any) {
+      console.error("Rating submission failed:", err);
+      return { success: false, error: err.message };
     }
   };
     // ============================================
@@ -1739,6 +1817,30 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
           </button>
         </div>
         {/* Task Dashboard for current role */}
+        
+                {/* Profile Switcher */}
+        <div className="grid grid-cols-3 gap-2.5">
+          <div className="col-span-2 bg-slate-950 p-2.5 border border-slate-800 rounded-lg">
+            <label className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold mb-1">
+              [SYS_AUTH] Target Actor Node:
+            </label>
+            <select
+  className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs text-cyan-400 focus:outline-none font-bold"
+  value={profile}
+  onChange={(e) => {
+    setProfile(e.target.value as any);
+    setSelectedTask(null);
+    setAssets([]);
+    setActiveAssetId("");
+  }}
+>
+              <option value="DISPATCHER">DISPATCHER NODE (Plant)</option>
+              <option value="DRIVER">DRIVER NODE (Transit Log)</option>
+              <option value="INSPECTOR">INSPECTOR NODE (Site Structure)</option>
+            </select>
+          </div>
+        </div>
+        
         <TaskDashboard
           userName={
             profile === "DISPATCHER"
@@ -1815,52 +1917,14 @@ onSelectTask={(task) => {
 }}
         />
 
-        {/* Profile Switcher */}
-        <div className="grid grid-cols-3 gap-2.5">
-          <div className="col-span-2 bg-slate-950 p-2.5 border border-slate-800 rounded-lg">
-            <label className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold mb-1">
-              [SYS_AUTH] Target Actor Node:
-            </label>
-            <select
-  className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs text-cyan-400 focus:outline-none font-bold"
-  value={profile}
-  onChange={(e) => {
-    setProfile(e.target.value as any);
-    setSelectedTask(null);
-    setAssets([]);
-    setActiveAssetId("");
-  }}
->
-              <option value="DISPATCHER">DISPATCHER NODE (Plant)</option>
-              <option value="DRIVER">DRIVER NODE (Transit Log)</option>
-              <option value="INSPECTOR">INSPECTOR NODE (Site Structure)</option>
-            </select>
-          </div>
-        </div>
+
        
         {/* Component Selector - Only show if not FACTORY_ONLY */}
         {profile !== "DRIVER" && manifest.scope !== "FACTORY_ONLY" && (
           <div className="bg-slate-950 border border-slate-800/80 p-2.5 rounded-lg space-y-1.5 animate-fade-in">
             <div className="flex items-center justify-between">
               <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">
-                📦 Component Manifest Array ({assets.length} items)
-              </span>
-              <span className="text-[8px] text-cyan-400 font-mono">Live Sync Channel</span>
-            </div>
-            <select
-              className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-xs font-mono text-slate-200 focus:outline-none"
-              value={activeAssetId}
-              onChange={(e) => setActiveAssetId(e.target.value)}
-            >
-              {assets.map((a, i) => (
-                <option key={a.id} value={a.id}>
-                  [{String(i + 1).padStart(2, "0")}] {a.id} ({a.state})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-              {/* Custody Ledger */}
+                           {/* Custody Ledger */}
         <div className="bg-cyan-950/10 border border-cyan-900/20 p-2.5 rounded-lg text-xs space-y-1">
           <div className="flex justify-between items-center border-b border-slate-800/40 pb-1">
             <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">
@@ -1879,6 +1943,24 @@ onSelectTask={(task) => {
             ))}
           </div>
         </div>
+                📦 Component Manifest Array ({assets.length} items)
+              </span>
+              <span className="text-[8px] text-cyan-400 font-mono">Live Sync Channel</span>
+            </div>
+            <select
+              className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-xs font-mono text-slate-200 focus:outline-none"
+              value={activeAssetId}
+              onChange={(e) => setActiveAssetId(e.target.value)}
+            >
+              {assets.map((a, i) => (
+                <option key={a.id} value={a.id}>
+                  [{String(i + 1).padStart(2, "0")}] {a.id} ({a.state})
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
 
         {/* Scanning - Only show if not FACTORY_ONLY */}
         {profile !== "DRIVER" && manifest.scope !== "FACTORY_ONLY" && (
@@ -2056,26 +2138,26 @@ onSelectTask={(task) => {
                 )}
               </>
             )}
-            {/* SLA Section with Real Calculations */}
+            {/* Time Tracking per Phase */}
             <div className="pt-1.5 border-t border-slate-900 grid grid-cols-3 text-[9px] text-slate-500 text-center font-mono">
               <div>
-                PLANT SLA:
+                🏭 Factory:
                 <span className="text-slate-300 font-bold block">{getPlantSLA()}m</span>
-                {(currentAsset?.factory_delay_minutes || 0) > 0 && (
-                  <span className="text-red-400 text-[7px]">(+{currentAsset?.factory_delay_minutes}m delays)</span>
+{(currentAsset?.factory_delay_minutes || 0) > 0 && (  
+                <span className="text-red-400 text-[7px]">(+{currentAsset?.factory_delay_minutes}m delays)</span>
                 )}
               </div>
               <div>
-                TRANSIT SLA:
+                🚚 Transit:
                 <span className="text-amber-500 font-bold block">{getTransitSLA()}m</span>
-                {(currentAsset?.transit_delay_minutes || 0) > 0 && (
+{(currentAsset?.transit_delay_minutes || 0) > 0 && (
                   <span className="text-red-400 text-[7px]">(+{currentAsset?.transit_delay_minutes}m delays)</span>
                 )}
               </div>
               <div>
-                SITE SLA:
+                🏗️ Site:
                 <span className="text-blue-400 font-bold block">{getSiteSLA()}m</span>
-                {(currentAsset?.site_delay_minutes || 0) > 0 && (
+{(currentAsset?.site_delay_minutes || 0) > 0 && (
                   <span className="text-red-400 text-[7px]">(+{currentAsset?.site_delay_minutes}m delays)</span>
                 )}
               </div>
