@@ -28,35 +28,6 @@ const Popup = dynamic(
   { ssr: false }
 );
 
-import L from "leaflet";
-
-if (typeof window !== "undefined") {
-  delete (L.Icon.Default.prototype as any)._getIconUrl;
-  L.Icon.Default.mergeOptions({
-    iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
-    iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
-    shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
-  });
-}
-
-const driverIcon = typeof window !== "undefined"
-  ? L.divIcon({
-      className: "custom-driver-marker",
-      html: `<div style="background: #06b6d4; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 12px rgba(6, 182, 212, 0.9); display: flex; align-items: center; justify-content: center; font-size: 12px;">🚚</div>`,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12],
-    })
-  : null;
-
-const siteIcon = typeof window !== "undefined"
-  ? L.divIcon({
-      className: "custom-site-marker",
-      html: `<div style="background: #ef4444; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 12px rgba(239, 68, 68, 0.9); display: flex; align-items: center; justify-content: center; font-size: 12px;">🏗️</div>`,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12],
-    })
-  : null;
-
 type Props = {
   driverLat: number | null | undefined;
   driverLng: number | null | undefined;
@@ -79,12 +50,45 @@ export default function MiniMap({
   showTraffic = true,
 }: Props) {
   const [mounted, setMounted] = useState(false);
+  const [L, setL] = useState<any>(null);
+  const [icons, setIcons] = useState<{
+    driverIcon: any;
+    siteIcon: any;
+  }>({ driverIcon: null, siteIcon: null });
 
   useEffect(() => {
+    // Load Leaflet only in the browser
+    const leaflet = require("leaflet");
+    setL(leaflet);
+
+    // Fix Leaflet default marker icons
+    delete (leaflet.Icon.Default.prototype as any)._getIconUrl;
+    leaflet.Icon.Default.mergeOptions({
+      iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
+      iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png",
+      shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png",
+    });
+
+    // Create custom icons
+    const driverIcon = leaflet.divIcon({
+      className: "custom-driver-marker",
+      html: `<div style="background: #06b6d4; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 12px rgba(6, 182, 212, 0.9); display: flex; align-items: center; justify-content: center; font-size: 12px;">🚚</div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+
+    const siteIcon = leaflet.divIcon({
+      className: "custom-site-marker",
+      html: `<div style="background: #ef4444; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 12px rgba(239, 68, 68, 0.9); display: flex; align-items: center; justify-content: center; font-size: 12px;">🏗️</div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+
+    setIcons({ driverIcon, siteIcon });
     setMounted(true);
   }, []);
 
-  if (!mounted) {
+  if (!mounted || !L) {
     return (
       <div
         className="bg-slate-900 border border-slate-700 rounded flex items-center justify-center"
@@ -154,35 +158,19 @@ export default function MiniMap({
             subdomains={["a", "b", "c"]}
           />
 
-          {/* Simulated traffic overlay — colored segments */}
           {showTraffic && fullRoute.length > 1 && (
             <>
-              {/* Red = heavy traffic segment (middle of route) */}
               <Polyline
                 positions={fullRoute}
-                pathOptions={{
-                  color: "#ef4444",
-                  weight: 6,
-                  opacity: 0.7,
-                }}
+                pathOptions={{ color: "#ef4444", weight: 6, opacity: 0.7 }}
               />
-              {/* Orange = moderate (offset slightly) */}
               <Polyline
                 positions={fullRoute}
-                pathOptions={{
-                  color: "#f97316",
-                  weight: 4,
-                  opacity: 0.5,
-                }}
+                pathOptions={{ color: "#f97316", weight: 4, opacity: 0.5 }}
               />
-              {/* Green = clear (base) */}
               <Polyline
                 positions={fullRoute}
-                pathOptions={{
-                  color: "#22c55e",
-                  weight: 2,
-                  opacity: 0.9,
-                }}
+                pathOptions={{ color: "#22c55e", weight: 2, opacity: 0.9 }}
               />
             </>
           )}
@@ -190,17 +178,12 @@ export default function MiniMap({
           {!showTraffic && fullRoute.length > 1 && (
             <Polyline
               positions={fullRoute}
-              pathOptions={{
-                color: "#06b6d4",
-                weight: 4,
-                opacity: 0.9,
-              }}
+              pathOptions={{ color: "#06b6d4", weight: 4, opacity: 0.9 }}
             />
           )}
 
-          {/* Driver marker */}
-          {driverLat && driverLng && driverIcon && (
-            <Marker position={[driverLat, driverLng]} icon={driverIcon}>
+          {driverLat && driverLng && icons.driverIcon && (
+            <Marker position={[driverLat, driverLng]} icon={icons.driverIcon}>
               <Popup>
                 <div className="text-xs">
                   <strong>🚚 Driver</strong>
@@ -211,9 +194,8 @@ export default function MiniMap({
             </Marker>
           )}
 
-          {/* Site marker */}
-          {siteIcon && (
-            <Marker position={[siteLat, siteLng]} icon={siteIcon}>
+          {icons.siteIcon && (
+            <Marker position={[siteLat, siteLng]} icon={icons.siteIcon}>
               <Popup>
                 <div className="text-xs">
                   <strong>🏗️ {siteName}</strong>
@@ -225,7 +207,6 @@ export default function MiniMap({
           )}
         </MapContainer>
 
-        {/* Traffic legend */}
         {showTraffic && (
           <div className="absolute bottom-1 left-1 bg-slate-900/90 border border-slate-700 rounded px-1.5 py-0.5 text-[7px] text-slate-300 z-[400]">
             <span className="inline-block w-2 h-0.5 bg-red-500 align-middle mr-1"></span>Heavy
