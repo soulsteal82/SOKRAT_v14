@@ -7,8 +7,11 @@ import dynamic from 'next/dynamic';
 import 'leaflet/dist/leaflet.css';
 import TaskDashboard, { SelectedTaskData } from "@/components/TaskDashboard";
 import { supabase } from "../app/lib/supabase";
-import DeliveryNoteModal from "@/components/DeliveryNoteModal";
-// Dynamically import Leaflet components to avoid SSR issues
+
+const DeliveryNoteModal = dynamic(
+  () => import("@/components/DeliveryNoteModal"),
+  { ssr: false }
+);// Dynamically import Leaflet components to avoid SSR issues
 const MapContainer = dynamic(
   () => import('react-leaflet').then((mod) => mod.MapContainer),
   { ssr: false }

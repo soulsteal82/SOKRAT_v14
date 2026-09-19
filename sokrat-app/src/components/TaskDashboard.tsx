@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../app/lib/supabase";
-import MiniMap from "./MiniMap";
+import dynamic from "next/dynamic";
 
+const MiniMap = dynamic(() => import("./MiniMap"), { ssr: false });
 type Factory = {
   factory_id: string;
   factory_name: string;
