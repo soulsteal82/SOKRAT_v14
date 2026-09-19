@@ -24,6 +24,7 @@ export type SelectedTaskData = {
   trip_details: any;
   order_details?: any[];
   factories: Factory[];
+  current_stage?: number | null;
 
   // Driver
   driver_name?: string | null;
@@ -74,13 +75,14 @@ type UserTask = SelectedTaskData & {
   user_name: string;
   user_role: string;
   due_at: string;
+  current_stage?: number | null;
 };
 
 type Props = {
   userName: string;
   userRole: string;
   selectedTaskId?: string | null;
-  onSelectTask?: (task: SelectedTaskData) => void;
+  onSelectTask?: (task: SelectedTaskData | null) => void;
 };
 
 const formatTimestamp = (timestamp: string) => {
@@ -136,9 +138,10 @@ export default function TaskDashboard({
       const { data: manifestData } = await supabase
         .from("manifests")
         .select(
-          "manifest_group_id, factories, order_details, driver_name, driver_phone, driver_rating, driver_total_trips, vehicle_plate, vehicle_trailer_type, vehicle_ownership, inspector_name, inspector_phone, inspector_email, driver_current_lat, driver_current_lng, driver_last_update, driver_status, site_name, site_latitude, site_longitude, selected_scope, selected_defect, dispatcher_panels_count, dispatcher_notes, epd1_url, mix1_url, epd2_url, mix2_url, delivery_note_url, delivery_note_file_name"
+          "manifest_group_id, factories, order_details, current_stage, driver_name, driver_phone, driver_rating, driver_total_trips, vehicle_plate, vehicle_trailer_type, vehicle_ownership, inspector_name, inspector_phone, inspector_email, driver_current_lat, driver_current_lng, driver_last_update, driver_status, site_name, site_latitude, site_longitude, selected_scope, selected_defect, dispatcher_panels_count, dispatcher_notes, epd1_url, mix1_url, epd2_url, mix2_url, delivery_note_url, delivery_note_file_name"
         )
         .in("manifest_group_id", manifestIds);
+        
             // Also fetch live driver ratings
     const driverNames = [...new Set(taskData.map(t => t.driver_name).filter(Boolean))];
     const { data: driverData } = await supabase
@@ -159,6 +162,7 @@ export default function TaskDashboard({
           ...task,
           factories: manifest?.factories || [],
           order_details: manifest?.order_details,
+          current_stage: manifest?.current_stage,
           driver_name: manifest?.driver_name,
           driver_phone: manifest?.driver_phone,
           driver_rating: getDriverRating(manifest?.driver_name)?.rating ?? manifest?.driver_rating,
@@ -220,9 +224,14 @@ export default function TaskDashboard({
 
     const handleTaskClick = async (task: UserTask) => {
     const isSame = expandedTaskId === task.id;
+    
 
     if (isSame) {
       setExpandedTaskId(null);
+          // Notify parent that no task is selected
+    if (onSelectTask) {
+      onSelectTask(null as any);
+    }
       return;
     }
 
@@ -300,6 +309,7 @@ export default function TaskDashboard({
               }`}
               onClick={() => handleTaskClick(task)}
             >
+            current_stage: task.current_stage,
               <div className="p-2">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-slate-200 text-[10px]">

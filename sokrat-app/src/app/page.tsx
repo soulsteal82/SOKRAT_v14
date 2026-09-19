@@ -544,21 +544,39 @@ const currentAsset = assets.length > 0
     return SEQUENCE[idx + 1];
   }
 
- function getAssetCustody(state: string | null | undefined): string {
+function getAssetCustody(state: string | null | undefined, selectedTask?: any): string {
   if (!state) return "—";
+  
+  // Get current dispatcher for multi-stage trips
+  const getDispatcherForStage = () => {
+    if (!selectedTask?.factories || selectedTask.factories.length === 0) return null;
+    const stage = selectedTask.current_stage || 1;
+    const factory = selectedTask.factories[stage - 1];
+    return factory?.dispatcher_name || null;
+  };
+  
   if (state === "INITIALIZED" || state === "LOADING_INITIATED" || state === "LOADING_COMPLETED") {
-      return "FACTORIES (Dispatcher)";
+    const dispatcher = getDispatcherForStage();
+    const stage = selectedTask?.current_stage || 1;
+    const totalStages = selectedTask?.factories?.length || 1;
+    if (dispatcher && totalStages > 1) {
+      return `FACTORIES ${String.fromCharCode(64 + stage)} (${dispatcher})`;
+      // Stage 1 → "FACTORIES A", Stage 2 → "FACTORIES B"
     }
-    if (state === "DISPATCHED" || state === "ARRIVED_AT_GATE") {
-      return "TRANSIT LOGISTICS (Driver)";
-    }
-    if (state === "RECEIVED_ON_SITE" || state === "GATE_IN_OFFLOADING" || state === "OFFLOADING_COMPLETED" ||
-      state === "INSTALLATION_INITIATED" || state === "INSTALLATION_COMPLETED") {
-      return "CONSTRUCTION SITE (Inspector)";
-    }
+    return "FACTORIES (Dispatcher)";
+  }
+  
+  if (state.startsWith("DISPATCHED") || state === "ARRIVED_AT_GATE") {
+    return "TRANSIT LOGISTICS (Driver)";
+  }
+  
+  if (state.startsWith("RECEIVED_ON_SITE") || state === "GATE_IN_OFFLOADING" || state === "OFFLOADING_COMPLETED" ||
+    state === "INSTALLATION_INITIATED" || state === "INSTALLATION_COMPLETED") {
     return "CONSTRUCTION SITE (Inspector)";
   }
-
+  
+  return "CONSTRUCTION SITE (Inspector)";
+}
     function handleBulkNFCScan() {
     setScanTypeLabel("NFC / RFID BATCH GATE SCAN");
     setIsScanning(true);
@@ -1239,21 +1257,22 @@ const allowed = validTransitions[currentAsset?.state || ""] || [];
   // ============================================
   // PHASE 3: Save per-task state to Supabase
   // ============================================
-   const saveTaskState = async (
-    updates: Partial<{
-      selected_scope: string;
-      selected_defect: string;
-      dispatcher_panels_count: number;
-      dispatcher_notes: string;
-      epd1_url: string | null;
-      mix1_url: string | null;
-      epd2_url: string | null;
-      mix2_url: string | null;
-      delivery_note_url: string | null;
-      delivery_note_file_name: string | null;
-    }>,
-    manifestIdOverride?: string
-  ) => {
+const saveTaskState = async (
+  updates: Partial<{
+    selected_scope: string;
+    selected_defect: string;
+    dispatcher_panels_count: number;
+    dispatcher_notes: string;
+    epd1_url: string | null;
+    mix1_url: string | null;
+    epd2_url: string | null;
+    mix2_url: string | null;
+    delivery_note_url: string | null;
+    delivery_note_file_name: string | null;
+    current_stage: number;  // ← Add this
+  }>,
+  manifestIdOverride?: string
+) => {
     const targetId = manifestIdOverride || selectedTask?.manifest_group_id;
 
     if (!targetId) {
@@ -1752,9 +1771,68 @@ onChange={(e) => {
 
         <div className="grid grid-cols-2 gap-2">
           <button
-            onClick={() => {
-              if (nextState) transitionAllAssets(nextState);
-            }}
+onClick={async () => {
+  if (!nextState) return;
+  
+  // Check if this is a multi-stage trip
+  const totalStages = selectedTask?.factories?.length || 1;
+  const currentStage = selectedTask?.current_stage || 1;
+  
+  // If dispatching (after all stages are done), or single stage, use normal flow
+  if (nextState !== "LOADING_COMPLETED" || totalStages === 1) {
+    transitionAllAssets(nextState);
+    return;
+  }
+  
+  // Multi-stage: at "Complete Loading", check if there's a next stage
+  if (currentStage < totalStages) {
+    // Advance to next stage
+    await saveTaskState(
+      { current_stage: currentStage + 1 } as any,
+      manifest.manifest_group_id
+    );
+    
+    // Capture the dispatcher name safely before async operations
+    const stageDispatcherName = selectedTask?.factories?.[currentStage - 1]?.dispatcher_name || "Dispatcher";
+    const nextDispatcherName = selectedTask?.factories?.[currentStage]?.dispatcher_name || "Next Dispatcher";
+    
+    // Reset assets back to INITIALIZED for the next dispatcher
+    setAssets(prev =>
+      prev.map(a => ({
+        ...a,
+        state: "INITIALIZED",
+        custodyHistory: [
+          ...a.custodyHistory,
+          {
+            timestamp: getFormattedTimestamp(),
+            state: `STAGE_${currentStage}_COMPLETE`,
+            custody: `FACTORIES ${String.fromCharCode(64 + currentStage)} (${stageDispatcherName})`
+          }
+        ]
+      }))
+    );
+    
+    // Reload the task to reflect new stage
+    await loadAssetsForTask(manifest.manifest_group_id);
+    
+    alert(
+      `✅ Stage ${currentStage} complete!\n\n` +
+      `Driver proceeds to Factory ${String.fromCharCode(64 + currentStage + 1)}.\n` +
+      `Next dispatcher: ${nextDispatcherName}`
+    );
+    
+    // Update selectedTask's current_stage
+    if (selectedTask) {
+      setSelectedTask({
+        ...selectedTask,
+        current_stage: currentStage + 1,
+      });
+    }
+  } else {
+    // Last stage complete — proceed to dispatch
+    transitionAllAssets(nextState);
+  }
+}}
             disabled={isButtonDisabled}
             className="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold p-2 rounded text-xs uppercase tracking-wider transition disabled:bg-slate-900 disabled:text-slate-600 border disabled:border-slate-800/40 disabled:opacity-40 disabled:pointer-events-none"
           >
@@ -1852,6 +1930,14 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
           userRole={profile}
           selectedTaskId={selectedTask?.task_id || null}
 onSelectTask={(task) => {
+  if (!task) {
+    // Task was collapsed — clear everything
+    setSelectedTask(null);
+    setAssets([]);
+    setActiveAssetId("");
+    return;
+  }
+
   setSelectedTask(task);
 
   // ============================================
@@ -1919,30 +2005,33 @@ onSelectTask={(task) => {
 
 
        
-        {/* Component Selector - Only show if not FACTORY_ONLY */}
-        {profile !== "DRIVER" && manifest.scope !== "FACTORY_ONLY" && (
+        {/* Custody Ledger - Verification Stamp */}
+        {selectedTask && assets.length > 0 && (
+          <div className="bg-cyan-950/10 border border-cyan-900/20 p-2.5 rounded-lg text-xs space-y-1">
+            <div className="flex justify-between items-center border-b border-slate-800/40 pb-1">
+              <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">
+                📍 Verification Custody Stamp:
+              </span>
+              <span className="text-cyan-400 font-bold uppercase bg-slate-950 px-2 py-0.5 rounded border border-cyan-800 text-[9px]">
+{getAssetCustody(currentAsset?.state, selectedTask)}
+              </span>
+            </div>
+            <div className="space-y-1 max-h-20 overflow-y-auto pr-1 font-mono text-[9px] text-slate-400 scrollbar-thin">
+              {currentAsset?.custodyHistory?.map((log, i) => (
+                <div key={i} className="flex justify-between">
+                  <span>[{log.timestamp || "—"}] {log.state}</span>
+                  <span className="text-cyan-500">→ {log.custody}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Component Manifest Array */}
+        {profile !== "DRIVER" && manifest.scope !== "FACTORY_ONLY" && assets.length > 0 && selectedTask && (
           <div className="bg-slate-950 border border-slate-800/80 p-2.5 rounded-lg space-y-1.5 animate-fade-in">
             <div className="flex items-center justify-between">
               <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">
-                           {/* Custody Ledger */}
-        <div className="bg-cyan-950/10 border border-cyan-900/20 p-2.5 rounded-lg text-xs space-y-1">
-          <div className="flex justify-between items-center border-b border-slate-800/40 pb-1">
-            <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">
-              📍 Verification Custody Stamp:
-            </span>
-            <span className="text-cyan-400 font-bold uppercase bg-slate-950 px-2 py-0.5 rounded border border-cyan-800 text-[9px]">
-              {getAssetCustody(currentAsset?.state)}
-            </span>
-          </div>
-          <div className="space-y-1 max-h-20 overflow-y-auto pr-1 font-mono text-[9px] text-slate-400 scrollbar-thin">
-            {currentAsset?.custodyHistory?.map((log, i) => (
-              <div key={i} className="flex justify-between">
-                <span>[{log.timestamp || "—"}] {log.state}</span>
-                <span className="text-cyan-500">→ {log.custody}</span>
-              </div>
-            ))}
-          </div>
-        </div>
                 📦 Component Manifest Array ({assets.length} items)
               </span>
               <span className="text-[8px] text-cyan-400 font-mono">Live Sync Channel</span>
@@ -1960,7 +2049,6 @@ onSelectTask={(task) => {
             </select>
           </div>
         )}
-
 
         {/* Scanning - Only show if not FACTORY_ONLY */}
         {profile !== "DRIVER" && manifest.scope !== "FACTORY_ONLY" && (
@@ -2041,12 +2129,7 @@ onSelectTask={(task) => {
                 {manifest.manifest_group_id}
               </span>
             </div>
-                        <button
-              onClick={() => setShowDeliveryNote(true)}
-              className="w-full text-[10px] bg-slate-900 hover:bg-slate-800 border border-slate-700 text-cyan-400 py-1.5 rounded font-bold uppercase transition"
-            >
-              📋 View Delivery Note
-            </button>
+                        
             {profile === "INSPECTOR" && !currentAsset?.hasScannedQR ? (
               <div className="col-span-2 py-1 bg-slate-900/40 border border-slate-800/80 rounded text-center text-[10px] text-slate-500 font-mono italic">
                 🔒 Engineering documents and EPD compliance locks hidden until target QR validation is executed.
