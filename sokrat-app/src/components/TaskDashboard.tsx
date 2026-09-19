@@ -309,7 +309,6 @@ export default function TaskDashboard({
               }`}
               onClick={() => handleTaskClick(task)}
             >
-            current_stage: task.current_stage,
               <div className="p-2">
                 <div className="flex items-center justify-between">
                   <span className="font-mono text-slate-200 text-[10px]">
