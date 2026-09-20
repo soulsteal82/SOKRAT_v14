@@ -102,6 +102,20 @@ export default function MiniMap({
 
     setIcons({ driverIcon, siteIcon });
     setMounted(true);
+
+    // Force Leaflet to recalculate tile size after mount
+    // (this prevents blank maps when the container resizes)
+    const t1 = setTimeout(() => {
+      window.dispatchEvent(new Event("resize"));
+    }, 150);
+    const t2 = setTimeout(() => {
+      window.dispatchEvent(new Event("resize"));
+    }, 600);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, []);
     // Fetch real road route whenever the origin or destination changes
   useEffect(() => {

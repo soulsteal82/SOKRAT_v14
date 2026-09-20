@@ -795,7 +795,7 @@ function getStatusPill(state: string | undefined) {
                           siteLat={task.site_latitude}
                           siteLng={task.site_longitude}
                           siteName={task.site_name || "Site"}
-                          height="100%"
+                          height="320px"
                         />
 
                         {/* ETA card — shows for all nodes once the trip is dispatched */}

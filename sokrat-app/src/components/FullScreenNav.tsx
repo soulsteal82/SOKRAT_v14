@@ -158,10 +158,10 @@ export default function FullScreenNav({
       </div>
             {/* Log Delay floating button + overlay — visible on top of the map */}
       {!delayOpen && (
-        <button
+         <button
           onClick={() => setDelayOpen(true)}
-          className="absolute top-20 right-3 z-[10001] bg-amber-600 hover:bg-amber-500 text-slate-950 text-xs font-black py-2 px-3 rounded-full shadow-2xl border-2 border-amber-300 flex items-center gap-1.5"
-                  >
+          className="absolute top-32 right-3 z-[10002] bg-amber-600 hover:bg-amber-500 text-slate-950 text-xs font-black py-2 px-3 rounded-full shadow-2xl border-2 border-amber-300 flex items-center gap-1.5"
+        >
           ⚠️ Log Delay
         </button>
       )}
