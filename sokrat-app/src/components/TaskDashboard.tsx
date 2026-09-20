@@ -270,17 +270,39 @@ export default function TaskDashboard({
         const now = Date.now();
         if (now - lastPush >= PUSH_INTERVAL_MS) {
           lastPush = now;
+
+          const payload = {
+            driver_current_lat: lat,
+            driver_current_lng: lng,
+            driver_last_update: new Date().toISOString(),
+            driver_status: "IN_TRANSIT",
+          };
+
+          console.log(
+            `[simulator] pushing to ${task.manifest_group_id} →`,
+            payload
+          );
+
           supabase
             .from("manifests")
-            .update({
-              driver_current_lat: lat,
-              driver_current_lng: lng,
-              driver_last_update: new Date().toISOString(),
-              driver_status: "IN_TRANSIT",
-            })
+            .update(payload)
             .eq("manifest_group_id", task.manifest_group_id)
-            .then(({ error }) => {
-              if (error) console.warn("[simulator] DB push failed:", error.message);
+            .select("manifest_group_id, driver_current_lat")
+            .then(({ data, error, status, statusText }) => {
+              if (error) {
+                console.error(
+                  "[simulator] DB push failed:",
+                  error.message,
+                  "| status:",
+                  status,
+                  statusText
+                );
+              } else {
+                console.log(
+                  "[simulator] DB push OK →",
+                  data
+                );
+              }
             });
         }
       },

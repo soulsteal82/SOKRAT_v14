@@ -362,10 +362,14 @@ const currentAsset = assets.length > 0
       if (gpsHandleRef.current) return;
 
       console.log("[SOKRAT] Starting driver GPS broadcast for", selectedTask?.manifest_group_id);
-      const handle = startDriverGpsBroadcast(
-        selectedTask!.manifest_group_id,
-        () => setGpsBroadcasting(true)
-      );
+      const handle = startDriverGpsBroadcast({
+        manifestGroupId: selectedTask!.manifest_group_id,
+        factoryLat: selectedTask?.factories?.[0]?.lat ?? null,
+        factoryLng: selectedTask?.factories?.[0]?.lng ?? null,
+        siteLat: selectedTask?.site_latitude ?? null,
+        siteLng: selectedTask?.site_longitude ?? null,
+        onUpdate: () => setGpsBroadcasting(true),
+      });
       gpsHandleRef.current = handle;
       setGpsBroadcasting(true);
     } else {

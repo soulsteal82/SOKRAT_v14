@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { classifyDelay } from "@/app/lib/delay";
 import type { RealtimeChannel } from "@supabase/supabase-js";
+import FleetRadar from "./FleetRadar";
 
 // ============================================================
 // Planner God-View — live table of all active trips.
@@ -72,7 +73,7 @@ export default function PlannerDashboard() {
   const [rows, setRows] = useState<PlannerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
-
+  const [radarOpen, setRadarOpen] = useState(false);
   const loadRows = async () => {
     // 1. Fetch every manifest
     const { data: manifests, error } = await supabase
@@ -236,6 +237,12 @@ export default function PlannerDashboard() {
             </span>
           )}
           <button
+            onClick={() => setRadarOpen(true)}
+            className="text-[9px] bg-cyan-600 hover:bg-cyan-500 border border-cyan-500 text-slate-950 px-3 py-1 rounded font-black uppercase tracking-wider transition"
+          >
+            🛰️ Launch Fleet Radar
+          </button>
+          <button
             onClick={loadRows}
             className="text-[9px] bg-purple-900/40 hover:bg-purple-900/70 border border-purple-800/60 text-purple-300 px-2 py-1 rounded font-bold uppercase tracking-wider transition"
           >
@@ -297,7 +304,10 @@ export default function PlannerDashboard() {
       {/* Footer */}
       <div className="px-4 py-2 bg-purple-950/20 border-t border-purple-900/40 text-[9px] text-slate-500 text-center font-mono">
         Live updates via Supabase Realtime · Powered by SOKRAT
-              </div>
+      </div>
+
+      {/* Fleet Radar overlay (top-level modal) */}
+      <FleetRadar isOpen={radarOpen} onClose={() => setRadarOpen(false)} />
     </div>
   );
 }
