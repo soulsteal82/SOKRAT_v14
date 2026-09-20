@@ -12,6 +12,7 @@ import 'leaflet/dist/leaflet.css';
 import TaskDashboard, { SelectedTaskData } from "@/components/TaskDashboard";
 import RamcoSyncPanel from "@/components/RamcoSyncPanel";
 import SiteGpsButton from "@/components/SiteGpsButton";
+import NavigationPanel from "@/components/NavigationPanel";
 import { supabase } from "../app/lib/supabase";
 
 const DeliveryNoteModal = dynamic(
@@ -2021,7 +2022,29 @@ onSelectTask={(task) => {
           {profile === "DRIVER" && manifest.scope !== "FACTORY_ONLY" && selectedTask && (
             <div className="space-y-3 animate-fade-in">
               {!isTripComplete() ? (
-                <>
+              
+              
+                <>                  {/* Talabat-style navigation card — shows when driver is on the road */}
+                  <NavigationPanel
+                    driverLat={
+                      currentAsset?.state.startsWith("DISPATCHED")
+                        ? (manifest.driver && selectedTask?.driver_current_lat != null
+                            ? selectedTask.driver_current_lat
+                            : 24.4800)
+                        : null
+                    }
+                    driverLng={
+                      currentAsset?.state.startsWith("DISPATCHED")
+                        ? (selectedTask?.driver_current_lng != null
+                            ? selectedTask.driver_current_lng
+                            : 54.4300)
+                        : null
+                    }
+                    siteLat={selectedTask?.site_latitude ?? null}
+                    siteLng={selectedTask?.site_longitude ?? null}
+                    siteName={selectedTask?.site_name || "Site"}
+                    isActive={currentAsset?.state.startsWith("DISPATCHED") ?? false}
+                  />
                   <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold mb-2">
                     Available System Actions:
                   </span>
