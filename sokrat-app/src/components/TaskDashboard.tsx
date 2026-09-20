@@ -254,12 +254,35 @@ export default function TaskDashboard({
     simCancelRef.current?.();
     setSimRunning(true);
 
+    // Throttle DB writes to once every ~1.2s (avoid hammering Supabase)
+    let lastPush = 0;
+    const PUSH_INTERVAL_MS = 1200;
+
     const cancel = simulateDriverAlongRoute({
       route: route.coordinates,
       durationMs: 20000,
       intervalMs: 400,
       onTick: (lat, lng) => {
+        // 1) Update local state so the simulating device animates smoothly
         setSimPos({ taskId: task.id, lat, lng });
+
+        // 2) Push to Supabase so every other device sees the movement
+        const now = Date.now();
+        if (now - lastPush >= PUSH_INTERVAL_MS) {
+          lastPush = now;
+          supabase
+            .from("manifests")
+            .update({
+              driver_current_lat: lat,
+              driver_current_lng: lng,
+              driver_last_update: new Date().toISOString(),
+              driver_status: "IN_TRANSIT",
+            })
+            .eq("manifest_group_id", task.manifest_group_id)
+            .then(({ error }) => {
+              if (error) console.warn("[simulator] DB push failed:", error.message);
+            });
+        }
       },
       onDone: () => {
         setSimRunning(false);
