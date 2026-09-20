@@ -9,6 +9,22 @@ import {
   TrafficSegment,
 } from "@/app/lib/routing";
 
+// ---- Haversine (metres) ----
+function haversineMeters(
+  a: [number, number],
+  b: [number, number]
+): number {
+  const R = 6371000;
+  const lat1 = (a[0] * Math.PI) / 180;
+  const lat2 = (b[0] * Math.PI) / 180;
+  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+  const dLng = ((b[1] - a[1]) * Math.PI) / 180;
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
+
 // ============================================================
 // NavigationPanel — Talabat-style driver card.
 // Shows: ETA, live traffic per segment, turn-by-turn, destination.
@@ -42,6 +58,13 @@ export default function NavigationPanel({
   const [traffic, setTraffic] = useState<TrafficSegment[]>([]);
   const [loading, setLoading] = useState(false);
   const [showAllSteps, setShowAllSteps] = useState(false);
+    // ---- Nearby detection (≤ 200 m from destination) ----
+  const NEARBY_THRESHOLD_M = 200;
+  const distanceToSiteM =
+    driverLat != null && driverLng != null && siteLat != null && siteLng != null
+      ? haversineMeters([driverLat, driverLng], [siteLat, siteLng])
+      : Infinity;
+  const driverIsNearby = distanceToSiteM <= NEARBY_THRESHOLD_M;
 
   useEffect(() => {
     if (!isActive || !driverLat || !driverLng || !siteLat || !siteLng) {
@@ -105,16 +128,30 @@ export default function NavigationPanel({
 
   return (
     <div className="bg-gradient-to-b from-cyan-950/30 to-slate-950 border border-cyan-800/40 rounded-xl overflow-hidden">
-      {/* Header */}
-      <div className="bg-cyan-950/60 px-4 py-2 flex items-center justify-between border-b border-cyan-800/40">
+      {/* Header — dynamic: "On The Way" or "Driver Is Nearby" */}
+      <div
+        className={`px-4 py-2 flex items-center justify-between border-b transition-colors ${
+          driverIsNearby
+            ? "bg-green-950/70 border-green-800/60"
+            : "bg-cyan-950/60 border-cyan-800/40"
+        }`}
+      >
         <div className="flex items-center gap-2">
-          <span className="text-2xl">🚚</span>
-          <span className="text-xs font-black tracking-widest text-cyan-300 uppercase">
-            On The Way
+          <span className="text-2xl">{driverIsNearby ? "📍" : "🚚"}</span>
+          <span
+            className={`text-xs font-black tracking-widest uppercase ${
+              driverIsNearby ? "text-green-300" : "text-cyan-300"
+            }`}
+          >
+            {driverIsNearby ? "Driver Is Nearby" : "On The Way"}
           </span>
         </div>
         <span className="text-[9px] text-slate-400 font-mono">
-          {route.source === "OSRM" ? "Live route" : "Fallback route"}
+          {driverIsNearby
+            ? `${Math.round(distanceToSiteM)} m away`
+            : route.source === "OSRM"
+            ? "Live route"
+            : "Fallback route"}
         </span>
       </div>
 

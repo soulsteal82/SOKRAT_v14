@@ -27,6 +27,40 @@ import {
   RouteResult,
   TrafficSegment,
 } from "@/app/lib/routing";
+const FitBounds = dynamic(
+  () =>
+    import("react-leaflet").then((m) => {
+      const { useMap } = m as any;
+      return function FitBoundsInner({
+        points,
+      }: {
+        points: [number, number][];
+      }) {
+        const map = useMap();
+        useEffect(() => {
+          if (!map || points.length < 2) return;
+          const valid = points.filter(
+            ([lat, lng]) =>
+              typeof lat === "number" &&
+              typeof lng === "number" &&
+              !isNaN(lat) &&
+              !isNaN(lng)
+          );
+          if (valid.length < 2) return;
+          try {
+            map.fitBounds(valid as any, {
+              padding: [60, 60],
+              maxZoom: 15,
+            });
+          } catch (e) {
+            console.warn("[FullScreenNav] fitBounds failed", e);
+          }
+        }, [map, JSON.stringify(points)]);
+        return null;
+      };
+    }),
+  { ssr: false }
+);
 
 type Props = {
   isOpen: boolean;
@@ -272,7 +306,18 @@ export default function FullScreenNav({
             scrollWheelZoom={true}
             dragging={true}
             zoomControl={true}
-          >
+          >            <FitBounds
+              points={
+                [
+                  driverLat != null && driverLng != null
+                    ? [driverLat, driverLng]
+                    : null,
+                  siteLat != null && siteLng != null
+                    ? [siteLat, siteLng]
+                    : null,
+                ].filter(Boolean) as [number, number][]
+              }
+            />
             <TileLayer
               attribution='&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
               url={`https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png?api_key=${process.env.NEXT_PUBLIC_STADIA_API_KEY || ""}`}

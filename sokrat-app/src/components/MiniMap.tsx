@@ -227,7 +227,6 @@ export default function MiniMap({
     // Derive from the actual custody state (source of truth).
     // Fall back to driver_status only if no state was passed.
     const s = currentState || "";
-
     if (s.includes("REJECTED"))
       return { text: "⛔ Rejected", color: "bg-red-950/60 text-red-400" };
     if (s === "INITIALIZED" || s.startsWith("LOADING"))
