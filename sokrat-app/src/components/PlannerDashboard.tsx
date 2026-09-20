@@ -14,6 +14,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 
 type PlannerRow = {
   manifest_group_id: string;
+  priority: string;
   status_label: string;
   status_color: string;
   delay_label: string;
@@ -76,7 +77,7 @@ export default function PlannerDashboard() {
     // 1. Fetch every manifest
     const { data: manifests, error } = await supabase
       .from("manifests")
-      .select("manifest_group_id, driver_name, inspector_name")
+      .select("manifest_group_id, driver_name, inspector_name, priority")
       .order("manifest_group_id", { ascending: true });
 
     if (error || !manifests) {
@@ -116,7 +117,7 @@ export default function PlannerDashboard() {
     });
 
     // 4. Build display rows
-    const built: PlannerRow[] = manifests.map((m) => {
+    const built: PlannerRow[] = manifests.map((m: any) => {
       const state = stateByManifest[m.manifest_group_id] || "INITIALIZED";
       const d = delayByManifest[m.manifest_group_id] || { f: 0, t: 0, s: 0 };
       const total = d.f + d.t + d.s;
@@ -125,12 +126,26 @@ export default function PlannerDashboard() {
 
       return {
         manifest_group_id: m.manifest_group_id,
+        priority: m.priority || "LOW",
         status_label: statusMeta.label,
         status_color: statusMeta.color,
         delay_label: delayInfo.label,
         delay_color: `${delayInfo.bg} ${delayInfo.color}`,
         total_delay_minutes: total,
       };
+    });
+
+    // Sort by priority: HIGH → MEDIUM → LOW, then by manifest ID
+    const priorityRank: Record<string, number> = {
+      HIGH: 0,
+      MEDIUM: 1,
+      LOW: 2,
+    };
+    built.sort((a, b) => {
+      const ra = priorityRank[a.priority] ?? 99;
+      const rb = priorityRank[b.priority] ?? 99;
+      if (ra !== rb) return ra - rb;
+      return a.manifest_group_id.localeCompare(b.manifest_group_id);
     });
 
     setRows(built);

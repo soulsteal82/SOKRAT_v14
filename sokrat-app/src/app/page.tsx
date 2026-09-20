@@ -1765,21 +1765,19 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
             </select>
           </div>
         </div>
-        
-        <TaskDashboard
-          userName={
-            profile === "DISPATCHER"
-              ? "Khalid Al Suwaidi"
-              : profile === "DRIVER"
-              ? "Mohammed Ali"
-              : profile === "INSPECTOR"
-              ? "Yusuf Al Hamadi"
-              : "Abid"  /* PLANNER */
-          }
-          userRole={profile}
-          selectedTaskId={selectedTask?.task_id || null}
-                    refreshKey={taskRefreshKey}
-onSelectTask={(task) => {
+        {profile !== "PLANNER" && (
+          <TaskDashboard
+            userName={
+              profile === "DISPATCHER"
+                ? "Khalid Al Suwaidi"
+                : profile === "DRIVER"
+                ? "Mohammed Ali"
+                : "Yusuf Al Hamadi"
+            }
+            userRole={profile}
+            selectedTaskId={selectedTask?.task_id || null}
+            refreshKey={taskRefreshKey}
+            onSelectTask={(task) => {
   if (!task) {
     // Task was collapsed — clear everything
     setSelectedTask(null);
@@ -1852,7 +1850,7 @@ onSelectTask={(task) => {
   loadAssetsForTask(task.manifest_group_id);
 }}
         />
-
+        )}
         {/* ═══════════════════════════════════════════════════════════
             DRIVER-FIRST LAYOUT
             When the profile is DRIVER and a dispatched task is open,
