@@ -523,8 +523,8 @@ function getStatusPill(state: string | undefined) {
         </span>
       </div>
 
-      <div className="space-y-1.5 max-h-[500px] overflow-y-auto">
-        {tasks.map((task) => {
+      <div className="space-y-1.5">
+              {tasks.map((task) => {
           const isMultiFactory = task.factories && task.factories.length > 1;
           const isExpanded = expandedTaskId === task.id;
           const isSimForThisTask = simPos?.taskId === task.id;
