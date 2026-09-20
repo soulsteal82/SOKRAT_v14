@@ -77,6 +77,7 @@ type UserTask = SelectedTaskData & {
   user_role: string;
   due_at: string;
   current_stage?: number | null;
+  asset_count?: number;
 };
 
 type Props = {
@@ -294,6 +295,17 @@ export default function TaskDashboard({
         "manifest_group_id, factories, order_details, current_stage, driver_name, driver_phone, driver_rating, driver_total_trips, vehicle_plate, vehicle_trailer_type, vehicle_ownership, inspector_name, inspector_phone, inspector_email, driver_current_lat, driver_current_lng, driver_last_update, driver_status, site_name, site_latitude, site_longitude, site_gps_source, site_gps_updated_at, selected_scope, selected_defect, dispatcher_panels_count, dispatcher_notes, epd1_url, mix1_url, epd2_url, mix2_url, delivery_note_url, delivery_note_file_name"
       )
       .in("manifest_group_id", manifestIds);
+          // Count actual assets per manifest (source of truth for panel count)
+    const { data: assetCounts } = await supabase
+      .from("assets")
+      .select("manifest_group_id")
+      .in("manifest_group_id", manifestIds);
+
+    const assetCountByManifest: Record<string, number> = {};
+    (assetCounts || []).forEach((row: any) => {
+      const id = row.manifest_group_id;
+      assetCountByManifest[id] = (assetCountByManifest[id] || 0) + 1;
+    });
 
     const driverNames = [
       ...new Set(taskData.map((t) => t.driver_name).filter(Boolean)),
@@ -317,6 +329,7 @@ export default function TaskDashboard({
         factories: manifest?.factories || [],
         order_details: manifest?.order_details,
         current_stage: manifest?.current_stage,
+                  asset_count: assetCountByManifest[task.manifest_group_id] || 0,
         driver_name: manifest?.driver_name,
         driver_phone: manifest?.driver_phone,
         driver_rating:
@@ -516,10 +529,6 @@ export default function TaskDashboard({
                     <div className="text-cyan-400 text-right font-bold">
                       {task.selected_scope || "FULL"}
                     </div>
-                    <div className="text-slate-500">⚠️ Defect:</div>
-                    <div className="text-amber-400 text-right font-bold">
-                      {task.selected_defect || "No Defects"}
-                    </div>
                   </div>
 
                   {task.driver_name && (
@@ -602,11 +611,11 @@ export default function TaskDashboard({
 
                   <SiteRow task={task} />
 
-                  {task.trip_details?.panels_count && (
+                  {task.asset_count !== undefined && task.asset_count > 0 && (
                     <div className="grid grid-cols-2 gap-1 text-[9px] border-t border-slate-800/60 pt-1">
                       <div className="text-slate-500">📦 Panels:</div>
                       <div className="text-cyan-400 text-right font-bold">
-                        {task.trip_details.panels_count}
+                        {task.asset_count}
                       </div>
                     </div>
                   )}
