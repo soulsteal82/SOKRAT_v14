@@ -2187,6 +2187,13 @@ onSelectTask={(task) => {
                       );
                     }}
                   />
+                                    {/* View Delivery Note — inspector can verify against physical copy */}
+                  <button
+                    onClick={() => setShowDeliveryNote(true)}
+                    className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 font-bold p-2 rounded text-xs uppercase tracking-wider transition flex items-center justify-center gap-2"
+                  >
+                    📋 View Delivery Note
+                  </button>
                   <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg text-xs space-y-1.5">
   {/* Compute document presence + scan state once, so both the checkbox
       and its label use the same rule. */}
