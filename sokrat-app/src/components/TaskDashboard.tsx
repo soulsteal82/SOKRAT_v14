@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "../app/lib/supabase";
+import { reverseGeocode } from "../app/lib/geocode";
+import React from "react";
 import dynamic from "next/dynamic";
 
 const MiniMap = dynamic(() => import("./MiniMap"), { ssr: false });
@@ -86,7 +88,96 @@ type Props = {
   selectedTaskId?: string | null;
   onSelectTask?: (task: SelectedTaskData | null) => void;
 };
+// ---- Site label: reverse-geocoded place name from coordinates ----
+function useSiteLabel(
+  lat: number | null | undefined,
+  lng: number | null | undefined
+) {
+  const [label, setLabel] = React.useState<string | null>(null);
 
+  React.useEffect(() => {
+    if (lat == null || lng == null) {
+      setLabel(null);
+      return;
+    }
+    let cancelled = false;
+    reverseGeocode(lat, lng).then((result) => {
+      if (!cancelled) setLabel(result);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [lat, lng]);
+
+  return label;
+}
+function SiteRow({ task }: { task: UserTask }) {
+  const geoLabel = useSiteLabel(task.site_latitude, task.site_longitude);
+
+  const hasCoords = task.site_latitude != null && task.site_longitude != null;
+
+  let display: string;
+  let subLabel: string | null = null;
+
+  if (!hasCoords) {
+    display = "Awaiting coordinates";
+    subLabel = "Inspector or RAMCO has not shared GPS yet";
+  } else if (geoLabel) {
+    display = geoLabel;
+    subLabel = `${task.site_latitude!.toFixed(4)}, ${task.site_longitude!.toFixed(4)}`;
+  } else if (task.site_name) {
+    display = task.site_name;
+    subLabel = `${task.site_latitude!.toFixed(4)}, ${task.site_longitude!.toFixed(4)}`;
+  } else {
+    display = `${task.site_latitude!.toFixed(4)}, ${task.site_longitude!.toFixed(4)}`;
+  }
+
+  return (
+    <div className="border-t border-slate-800/60 pt-1 text-[9px] space-y-0.5">
+      <div className="grid grid-cols-2 gap-1">
+        <span className="text-slate-500">📍 Site:</span>
+        <span
+          className={`text-right ${
+            hasCoords
+              ? "text-slate-200"
+              : "text-amber-500 italic"
+          }`}
+        >
+          {display}
+        </span>
+      </div>
+      {subLabel && (
+        <div className="grid grid-cols-2 gap-1">
+          <span className="text-slate-600 text-[8px]">
+            {hasCoords ? "Coordinates:" : ""}
+          </span>
+          <span className="text-slate-500 text-right text-[8px] font-mono">
+            {subLabel}
+          </span>
+        </div>
+      )}
+      {/* Source badge */}
+      {hasCoords && task.site_gps_source && (
+        <div className="grid grid-cols-2 gap-1">
+          <span className="text-slate-600 text-[8px]">Source:</span>
+          <span className="text-right text-[8px]">
+            <span
+              className={`px-1.5 py-0.5 rounded font-bold ${
+                task.site_gps_source === "INSPECTOR"
+                  ? "bg-cyan-950/50 text-cyan-400"
+                  : task.site_gps_source === "RAMCO"
+                  ? "bg-purple-950/50 text-purple-300"
+                  : "bg-slate-800 text-slate-400"
+              }`}
+            >
+              {task.site_gps_source}
+            </span>
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
 const formatTimestamp = (timestamp: string) => {
   if (!timestamp) return "N/A";
   const date = new Date(timestamp);
@@ -454,21 +545,15 @@ export default function TaskDashboard({
                     </div>
                   )}
 
-                  {/* Site */}
-                  {task.site_name && (
+                  {/* Site — driven by coordinates */}
+                  <SiteRow task={task} />
+
+                  {task.trip_details?.panels_count && (
                     <div className="grid grid-cols-2 gap-1 text-[9px] border-t border-slate-800/60 pt-1">
-                      <div className="text-slate-500">📍 Site:</div>
-                      <div className="text-slate-200 text-right">
-                        {task.site_name}
+                      <div className="text-slate-500">📦 Panels:</div>
+                      <div className="text-cyan-400 text-right font-bold">
+                        {task.trip_details.panels_count}
                       </div>
-                      {task.trip_details?.panels_count && (
-                        <>
-                          <div className="text-slate-500">📦 Panels:</div>
-                          <div className="text-cyan-400 text-right font-bold">
-                            {task.trip_details.panels_count}
-                          </div>
-                        </>
-                      )}
                     </div>
                   )}
 
