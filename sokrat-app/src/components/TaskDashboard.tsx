@@ -52,6 +52,8 @@ export type SelectedTaskData = {
   site_name?: string | null;
   site_latitude?: number | null;
   site_longitude?: number | null;
+    site_gps_source?: string | null;
+  site_gps_updated_at?: string | null;
 
   // PER-TASK DISPATCHER STATE (new)
   selected_scope?: string | null;
@@ -138,8 +140,8 @@ export default function TaskDashboard({
       const { data: manifestData } = await supabase
         .from("manifests")
         .select(
-          "manifest_group_id, factories, order_details, current_stage, driver_name, driver_phone, driver_rating, driver_total_trips, vehicle_plate, vehicle_trailer_type, vehicle_ownership, inspector_name, inspector_phone, inspector_email, driver_current_lat, driver_current_lng, driver_last_update, driver_status, site_name, site_latitude, site_longitude, selected_scope, selected_defect, dispatcher_panels_count, dispatcher_notes, epd1_url, mix1_url, epd2_url, mix2_url, delivery_note_url, delivery_note_file_name"
-        )
+          "manifest_group_id, factories, order_details, current_stage, driver_name, driver_phone, driver_rating, driver_total_trips, vehicle_plate, vehicle_trailer_type, vehicle_ownership, inspector_name, inspector_phone, inspector_email, driver_current_lat, driver_current_lng, driver_last_update, driver_status, site_name, site_latitude, site_longitude, site_gps_source, site_gps_updated_at, selected_scope, selected_defect, dispatcher_panels_count, dispatcher_notes, epd1_url, mix1_url, epd2_url, mix2_url, delivery_note_url, delivery_note_file_name"
+                  )
         .in("manifest_group_id", manifestIds);
         
             // Also fetch live driver ratings
@@ -180,6 +182,8 @@ export default function TaskDashboard({
           site_name: manifest?.site_name,
           site_latitude: manifest?.site_latitude,
           site_longitude: manifest?.site_longitude,
+                    site_gps_source: manifest?.site_gps_source,
+          site_gps_updated_at: manifest?.site_gps_updated_at,
           selected_scope: manifest?.selected_scope,
           selected_defect: manifest?.selected_defect,
           dispatcher_panels_count: manifest?.dispatcher_panels_count,
@@ -268,6 +272,8 @@ export default function TaskDashboard({
         site_name: task.site_name,
         site_latitude: task.site_latitude,
         site_longitude: task.site_longitude,
+                site_gps_source: task.site_gps_source,
+        site_gps_updated_at: task.site_gps_updated_at,
         selected_scope: task.selected_scope,
         selected_defect: task.selected_defect,
         dispatcher_panels_count: task.dispatcher_panels_count,

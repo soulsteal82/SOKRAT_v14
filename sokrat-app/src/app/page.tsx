@@ -3,9 +3,15 @@
 import React, { useState, useEffect, useRef } from "react";
 import dynamic from 'next/dynamic';
 
+const getISOTimestamp = (): string => {
+  return new Date().toISOString();
+};
+
 // Import Leaflet CSS directly in the component
 import 'leaflet/dist/leaflet.css';
 import TaskDashboard, { SelectedTaskData } from "@/components/TaskDashboard";
+import RamcoSyncPanel from "@/components/RamcoSyncPanel";
+import SiteGpsButton from "@/components/SiteGpsButton";
 import { supabase } from "../app/lib/supabase";
 
 const DeliveryNoteModal = dynamic(
@@ -325,9 +331,7 @@ export default function Home() {
     });
   };
 
-  const [assets, setAssets] = useState<Asset[]>(() =>
-    generateInitialBatch("ICAD-YAS-ALM-260706-042", 1)
-  );
+  const [assets, setAssets] = useState<Asset[]>([]);
 
   const [activeAssetId, setActiveAssetId] = useState<string>("BIM-PRC-FL03-SEC04-W082");
   const [error, setError] = useState<string | null>(null);
@@ -1123,23 +1127,18 @@ const allowed = validTransitions[currentAsset?.state || ""] || [];
       const updatedFields = { ...customFields };
 
       if (nextState === "LOADING_INITIATED") {
-        updatedFields.loading_started_timestamp = now;
-      }
+  updatedFields.loading_started_timestamp = new Date().toISOString();      }
       if (nextState === "LOADING_COMPLETED") {
-        updatedFields.loading_completed_timestamp = now;
-      }
+  updatedFields.loading_completed_timestamp = new Date().toISOString();      }
       if (nextState === "GATE_IN_OFFLOADING") {
-        updatedFields.offloading_started_timestamp = now;
-      }
+  updatedFields.offloading_started_timestamp = new Date().toISOString();      }
       if (nextState === "OFFLOADING_COMPLETED") {
-        updatedFields.offloading_completed_timestamp = now;
-      }
+  updatedFields.offloading_completed_timestamp = new Date().toISOString();      }
       if (nextState === "INSTALLATION_INITIATED") {
-        updatedFields.installation_started_timestamp = now;
-      }
+  updatedFields.installation_started_timestamp = new Date().toISOString();      }
       if (nextState === "INSTALLATION_COMPLETED") {
-        updatedFields.installation_completed_timestamp = now;
-        updatedFields.installed_timestamp = now;
+updatedFields.installation_completed_timestamp = new Date().toISOString();
+  updatedFields.installed_timestamp = new Date().toISOString();
       }
 
       setAssets(prev => {
@@ -1175,15 +1174,16 @@ const allowed = validTransitions[currentAsset?.state || ""] || [];
     return null;
   };
 
-  const getOffloadingDuration = () => {
-    if (currentAsset?.offloading_started_timestamp && currentAsset?.offloading_completed_timestamp) {
-      const start = new Date(currentAsset?.offloading_started_timestamp);
-      const end = new Date(currentAsset?.offloading_completed_timestamp);
-      const diff = Math.round((end.getTime() - start.getTime()) / 60000);
-      return diff;
-    }
-    return null;
-  };
+const getOffloadingDuration = () => {
+  if (currentAsset?.offloading_started_timestamp && currentAsset?.offloading_completed_timestamp) {
+    const start = new Date(currentAsset.offloading_started_timestamp);
+    const end = new Date(currentAsset.offloading_completed_timestamp);
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) return null;
+    const diff = Math.round((end.getTime() - start.getTime()) / 60000);
+    return diff;
+  }
+  return null;
+};
 
   const getInstallationDuration = () => {
     if (currentAsset?.installation_started_timestamp && currentAsset?.installation_completed_timestamp) {
@@ -1639,105 +1639,21 @@ onClick={() => {
           </div>
         </div>
 
-        {/* Certificate Upload Section - Optional */}
-        <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg">
-          <span className="block text-[8px] text-slate-400 uppercase font-bold mb-2">
-            📄 Upload Engineering Certificates <span className="text-slate-500">(Optional)</span>
-          </span>
-          <div className="space-y-2">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <label className="text-[9px] text-slate-400 block mb-1">EPD 1:</label>
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.jpg,.png"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setEpd1File(e.target.files[0]);
-                      setEpd1FileName(e.target.files[0].name);
-                    }
-                  }}
-                  className="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-800 file:text-cyan-400 hover:file:bg-slate-700"
-                />
-                {epd1FileName && <span className="text-[9px] text-green-400">✅ {epd1FileName}</span>}
-              </div>
-              <div>
-                <label className="text-[9px] text-slate-400 block mb-1">Mix Design 1:</label>
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.jpg,.png"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setMix1File(e.target.files[0]);
-                      setMix1FileName(e.target.files[0].name);
-                    }
-                  }}
-                  className="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-800 file:text-cyan-400 hover:file:bg-slate-700"
-                />
-                {mix1FileName && <span className="text-[9px] text-green-400">✅ {mix1FileName}</span>}
-              </div>
-              <div>
-                <label className="text-[9px] text-slate-400 block mb-1">EPD 2 (Optional):</label>
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.jpg,.png"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setEpd2File(e.target.files[0]);
-                      setEpd2FileName(e.target.files[0].name);
-                    }
-                  }}
-                  className="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-800 file:text-cyan-400 hover:file:bg-slate-700"
-                />
-                {epd2FileName && <span className="text-[9px] text-green-400">✅ {epd2FileName}</span>}
-              </div>
-              <div>
-                <label className="text-[9px] text-slate-400 block mb-1">Mix Design 2 (Optional):</label>
-                <input
-                  type="file"
-                  accept=".pdf,.doc,.docx,.jpg,.png"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files[0]) {
-                      setMix2File(e.target.files[0]);
-                      setMix2FileName(e.target.files[0].name);
-                    }
-                  }}
-                  className="w-full text-xs text-slate-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-slate-800 file:text-cyan-400 hover:file:bg-slate-700"
-                />
-                {mix2FileName && <span className="text-[9px] text-green-400">✅ {mix2FileName}</span>}
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleCertificateUpload}
-                disabled={!hasUploadedFiles}
-                className={`flex-1 font-bold py-1.5 rounded text-xs uppercase transition ${
-                  hasUploadedFiles
-                    ? "bg-cyan-600 hover:bg-cyan-500 text-slate-950"
-                    : "bg-slate-800 text-slate-500 cursor-not-allowed opacity-50"
-                }`}
-              >
-                ⚡ Upload & Attach Certificates
-              </button>
-              <button
-                onClick={clearAllCertificates}
-                className="bg-red-950 hover:bg-red-900 text-red-400 border border-red-900/60 font-bold py-1.5 px-3 rounded text-xs uppercase transition"
-              >
-                ✕ Clear All
-              </button>
-            </div>
-            {(hasEpd1 || hasEpd2) && (hasMix1 || hasMix2) && (
-              <div className="text-[9px] text-green-400 text-center font-mono">
-                ✅ Certificates attached ({hasEpd1 ? "EPD1 ✓" : ""} {hasEpd2 ? "EPD2 ✓" : ""} {hasMix1 ? "Mix1 ✓" : ""} {hasMix2 ? "Mix2 ✓" : ""})
-              </div>
-            )}
-            <div className="text-[7px] text-slate-500 text-center">
-              ℹ️ Certificate upload is optional. You can dispatch without uploading.
-            </div>
-          </div>
-        </div>
+        {/* RAMCO-Fed Certificates (read-only) */}
+        <RamcoSyncPanel
+          epd1_url={currentAsset?.epd1_certificate_url}
+          epd1_file_name={currentAsset?.epd1_file_name}
+          mix1_url={currentAsset?.mix1_certificate_url}
+          mix1_file_name={currentAsset?.mix1_file_name}
+          epd2_url={currentAsset?.epd2_certificate_url}
+          epd2_file_name={currentAsset?.epd2_file_name}
+          mix2_url={currentAsset?.mix2_certificate_url}
+          mix2_file_name={currentAsset?.mix2_file_name}
+          ramco_synced_at={null}
+          isDemoMode={typeof window !== "undefined" && window.location.search.includes("demo=1")}
+        />
 
-        {/* Defect Selection */}
+              {/* Defect Selection */}
         <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg">
           <span className="block text-[8px] text-slate-400 uppercase font-bold mb-2">
             Select Active Defect Vector (If Rejecting):
@@ -2051,8 +1967,8 @@ onSelectTask={(task) => {
         )}
 
         {/* Scanning - Only show if not FACTORY_ONLY */}
-        {profile !== "DRIVER" && manifest.scope !== "FACTORY_ONLY" && (
-          <div className="grid grid-cols-3 gap-2">
+        {profile !== "DRIVER" && manifest.scope !== "FACTORY_ONLY" && selectedTask && (
+                  <div className="grid grid-cols-3 gap-2">
             <button
               onClick={handleBulkNFCScan}
               className="col-span-2 bg-gradient-to-r from-cyan-950 to-slate-900 hover:from-cyan-900 border border-cyan-500/40 p-2 rounded text-center transition shadow-md"
@@ -2071,7 +1987,7 @@ onSelectTask={(task) => {
         )}
 
         {/* Asset Details - Only show if not FACTORY_ONLY */}
-        {manifest.scope !== "FACTORY_ONLY" && (
+{manifest.scope !== "FACTORY_ONLY" && selectedTask && (
           <div className="grid grid-cols-2 gap-2 bg-slate-950/50 p-2.5 border border-slate-800 rounded-lg text-xs">
             <div>
               <span className="block text-[8px] text-slate-500 uppercase tracking-wider">
@@ -2121,7 +2037,7 @@ onSelectTask={(task) => {
         )}
 
         {/* Documents & SLA */}
-        {profile !== "DRIVER" && manifest.scope !== "FACTORY_ONLY" && (
+{profile !== "DRIVER" && manifest.scope !== "FACTORY_ONLY" && selectedTask && (
           <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg text-[11px] space-y-1.5">
             <div className="flex justify-between text-slate-400">
               <span>Manifest Group Reference Link:</span>
@@ -2379,6 +2295,28 @@ onSelectTask={(task) => {
               </span>
               {!currentAsset?.state.includes("REJECTED") ? (
                 <div className="space-y-3">
+                                  {/* Site GPS sharing — two-way with RAMCO planner */}
+                  <SiteGpsButton
+                    manifestGroupId={manifest.manifest_group_id}
+                    siteName={selectedTask?.site_name}
+                    currentLat={selectedTask?.site_latitude}
+                    currentLng={selectedTask?.site_longitude}
+                    currentSource={selectedTask?.site_gps_source}
+                    currentUpdatedAt={selectedTask?.site_gps_updated_at}
+                    onSaved={(la, ln, src) => {
+                      setSelectedTask((prev) =>
+                        prev
+                          ? {
+                              ...prev,
+                              site_latitude: la,
+                              site_longitude: ln,
+                              site_gps_source: src,
+                              site_gps_updated_at: new Date().toISOString(),
+                            }
+                          : prev
+                      );
+                    }}
+                  />
                   <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg text-xs space-y-1.5">
                     <label className="flex items-center space-x-2 cursor-pointer text-slate-300">
                       <input
@@ -2628,7 +2566,7 @@ onSelectTask={(task) => {
           )}
 
           {/* Dispatcher Node */}
-          {profile === "DISPATCHER" && renderDispatcherActions()}
+          {profile === "DISPATCHER" && selectedTask && assets.length > 0 && renderDispatcherActions()}
         </div>
 
         {/* Trip Creation Form - Only visible to Dispatcher when trip is finished or no active trip */}
