@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { supabase } from "@/app/lib/supabase";
 import { classifyDelay } from "@/app/lib/delay";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 
 // ============================================================
 // Planner God-View — live table of all active trips.
@@ -137,8 +138,50 @@ export default function PlannerDashboard() {
     setLoading(false);
   };
 
+  // Initial load
   useEffect(() => {
     loadRows();
+  }, []);
+
+  // Realtime subscription — re-fetch on any change to manifests or assets
+  const channelRef = useRef<RealtimeChannel | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // Debounce rapid-fire events (multi-row updates fire one event per row)
+    const scheduleRefresh = () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        console.log("[Planner] Realtime change detected → refreshing table");
+        loadRows();
+      }, 400);
+    };
+
+    const channel = supabase
+      .channel("planner-realtime")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "manifests" },
+        scheduleRefresh
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "assets" },
+        scheduleRefresh
+      )
+      .subscribe((status) => {
+        console.log("[Planner] Realtime subscription status:", status);
+      });
+
+    channelRef.current = channel;
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+        channelRef.current = null;
+      }
+    };
   }, []);
 
   if (loading) {
@@ -163,6 +206,12 @@ export default function PlannerDashboard() {
           </span>
           <span className="text-[9px] text-purple-400/60 font-mono">
             ({rows.length})
+          </span>
+          <span className="flex items-center gap-1 ml-2 px-2 py-0.5 rounded-full bg-green-950/40 border border-green-800/60">
+            <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+            <span className="text-[8px] text-green-300 font-bold uppercase tracking-wider">
+              Live
+            </span>
           </span>
         </div>
         <div className="flex items-center gap-3">
@@ -232,8 +281,8 @@ export default function PlannerDashboard() {
 
       {/* Footer */}
       <div className="px-4 py-2 bg-purple-950/20 border-t border-purple-900/40 text-[9px] text-slate-500 text-center font-mono">
-        Auto-refresh arrives in Task 9c · Powered by SOKRAT
-      </div>
+        Live updates via Supabase Realtime · Powered by SOKRAT
+              </div>
     </div>
   );
 }
