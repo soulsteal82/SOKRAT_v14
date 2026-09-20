@@ -23,6 +23,7 @@ type Props = {
   siteName: string;
   isActive: boolean;
   onOpenFullScreen?: () => void;
+  compact?: boolean;
 };
 
 export default function NavigationPanel({
@@ -33,6 +34,7 @@ export default function NavigationPanel({
   siteName,
   isActive,
   onOpenFullScreen,
+  compact = false,
 }: Props) {
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [traffic, setTraffic] = useState<TrafficSegment[]>([]);
@@ -162,77 +164,81 @@ export default function NavigationPanel({
         </div>
       </div>
 
-      {/* Traffic segments */}
-      <div className="p-3 space-y-1.5 border-b border-slate-800">
-        <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1">
-          Traffic ahead
-        </div>
-        {traffic.map((seg, i) => (
-          <div
-            key={i}
-            className="flex items-center justify-between bg-slate-900/60 rounded px-2 py-1.5 text-xs"
-          >
-            <div className="flex items-center gap-2">
+      {/* Traffic segments — hidden in compact mode */}
+      {!compact && (
+        <div className="p-3 space-y-1.5 border-b border-slate-800">
+          <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1">
+            Traffic ahead
+          </div>
+          {traffic.map((seg, i) => (
+            <div
+              key={i}
+              className="flex items-center justify-between bg-slate-900/60 rounded px-2 py-1.5 text-xs"
+            >
+              <div className="flex items-center gap-2">
+                <span
+                  className="w-2.5 h-2.5 rounded-full"
+                  style={{ backgroundColor: seg.color }}
+                />
+                <span className="text-slate-300 font-medium">
+                  Segment {i + 1} · {seg.label}
+                </span>
+              </div>
               <span
-                className="w-2.5 h-2.5 rounded-full"
-                style={{ backgroundColor: seg.color }}
-              />
-              <span className="text-slate-300 font-medium">
-                Segment {i + 1} · {seg.label}
+                className={`font-mono font-bold ${
+                  seg.addedMinutes === 0
+                    ? "text-green-400"
+                    : seg.addedMinutes < 10
+                    ? "text-amber-400"
+                    : "text-red-400"
+                }`}
+              >
+                {seg.addedMinutes === 0 ? "—" : `+${seg.addedMinutes}m`}
               </span>
             </div>
-            <span
-              className={`font-mono font-bold ${
-                seg.addedMinutes === 0
-                  ? "text-green-400"
-                  : seg.addedMinutes < 10
-                  ? "text-amber-400"
-                  : "text-red-400"
-              }`}
-            >
-              {seg.addedMinutes === 0 ? "—" : `+${seg.addedMinutes}m`}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* Turn-by-turn */}
-      <div className="p-3 space-y-2 border-b border-slate-800">
-        <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1">
-          Turn-by-turn
+          ))}
         </div>
-        {visibleSteps.map((step, i) => (
-          <div key={i} className="flex items-start gap-2 text-xs">
-            <span className="text-cyan-400 text-sm mt-0.5">
-              {step.maneuver === "arrive"
-                ? "🏁"
-                : step.maneuver.includes("left")
-                ? "⬅️"
-                : step.maneuver.includes("right")
-                ? "➡️"
-                : "⬆️"}
-            </span>
-            <div className="flex-1">
-              <div className="text-slate-200">{step.instruction}</div>
-              {step.distanceMeters > 0 && (
-                <div className="text-[10px] text-slate-500 font-mono">
-                  {(step.distanceMeters / 1000).toFixed(1)} km
-                </div>
-              )}
-            </div>
+      )}
+
+      {/* Turn-by-turn — hidden in compact mode */}
+      {!compact && (
+        <div className="p-3 space-y-2 border-b border-slate-800">
+          <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1">
+            Turn-by-turn
           </div>
-        ))}
-        {route.steps.length > 3 && (
-          <button
-            onClick={() => setShowAllSteps((v) => !v)}
-            className="w-full text-[10px] text-cyan-400 hover:text-cyan-300 underline font-bold uppercase tracking-wider pt-1"
-          >
-            {showAllSteps
-              ? "▲ Show fewer"
-              : `▼ Show all ${route.steps.length} steps`}
-          </button>
-        )}
-      </div>
+          {visibleSteps.map((step, i) => (
+            <div key={i} className="flex items-start gap-2 text-xs">
+              <span className="text-cyan-400 text-sm mt-0.5">
+                {step.maneuver === "arrive"
+                  ? "🏁"
+                  : step.maneuver.includes("left")
+                  ? "⬅️"
+                  : step.maneuver.includes("right")
+                  ? "➡️"
+                  : "⬆️"}
+              </span>
+              <div className="flex-1">
+                <div className="text-slate-200">{step.instruction}</div>
+                {step.distanceMeters > 0 && (
+                  <div className="text-[10px] text-slate-500 font-mono">
+                    {(step.distanceMeters / 1000).toFixed(1)} km
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+          {route.steps.length > 3 && (
+            <button
+              onClick={() => setShowAllSteps((v) => !v)}
+              className="w-full text-[10px] text-cyan-400 hover:text-cyan-300 underline font-bold uppercase tracking-wider pt-1"
+            >
+              {showAllSteps
+                ? "▲ Show fewer"
+                : `▼ Show all ${route.steps.length} steps`}
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Destination */}
       <div className="p-3 bg-slate-950/60">
@@ -251,13 +257,15 @@ export default function NavigationPanel({
           </div>
         </div>
 
-        {/* Full-screen navigation launcher */}
-        <button
-          onClick={() => onOpenFullScreen && onOpenFullScreen()}
-          className="mt-3 w-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black py-3 rounded-lg uppercase tracking-widest text-sm transition flex items-center justify-center gap-2"
-        >
-          🗺️ OPEN NAVIGATION
-        </button>
+        {/* Full-screen navigation launcher — hidden in compact mode */}
+        {!compact && onOpenFullScreen && (
+          <button
+            onClick={() => onOpenFullScreen()}
+            className="mt-3 w-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black py-3 rounded-lg uppercase tracking-widest text-sm transition flex items-center justify-center gap-2"
+          >
+            🗺️ OPEN NAVIGATION
+          </button>
+        )}
       </div>
     </div>
   );

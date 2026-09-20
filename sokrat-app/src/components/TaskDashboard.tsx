@@ -791,6 +791,7 @@ export default function TaskDashboard({
                               siteLng={task.site_longitude}
                               siteName={task.site_name || "Site"}
                               isActive={true}
+                                                            compact={true}
                             />
                           )}
                       </div>
