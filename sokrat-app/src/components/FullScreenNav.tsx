@@ -37,11 +37,20 @@ type Props = {
   siteLng: number | null;
   siteName: string;
   vehiclePlate?: string | null;
+  manifestGroupId?: string | null;
+  onDelayLogged?: (reason: string, minutes: number) => void;
 };
 
 // Force leaflet to re-bind icons after mount
 let iconsReady = false;
 let leafletLib: any = null;
+
+const DELAY_REASONS = [
+  "Traffic Congestion",
+  "Route Diversion",
+  "Weighbridge Inspection Delay",
+  "Safety Stoppage",
+];
 
 export default function FullScreenNav({
   isOpen,
@@ -52,7 +61,11 @@ export default function FullScreenNav({
   siteLng,
   siteName,
   vehiclePlate,
+  manifestGroupId,
+  onDelayLogged,
 }: Props) {
+  const [delayOpen, setDelayOpen] = useState(false);
+  const [delayBusy, setDelayBusy] = useState(false);
   const [L, setL] = useState<any>(null);
   const [icons, setIcons] = useState<{
     driverIcon: any;
@@ -143,6 +156,97 @@ export default function FullScreenNav({
           ✕ Close
         </button>
       </div>
+            {/* Log Delay floating button + overlay — visible on top of the map */}
+      {!delayOpen && (
+        <button
+          onClick={() => setDelayOpen(true)}
+          className="absolute top-20 right-3 z-[500] bg-amber-600 hover:bg-amber-500 text-slate-950 text-xs font-black py-2 px-3 rounded-full shadow-2xl border-2 border-amber-300 flex items-center gap-1.5"
+        >
+          ⚠️ Log Delay
+        </button>
+      )}
+
+      {delayOpen && (
+        <div className="absolute inset-0 z-[600] bg-slate-950/95 backdrop-blur-sm flex flex-col items-center justify-center p-6">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl p-5 space-y-4">
+            <div className="text-center">
+              <div className="text-3xl mb-1">⚠️</div>
+              <div className="text-sm font-black text-amber-400 uppercase tracking-widest">
+                Log Delay
+              </div>
+              <div className="text-[10px] text-slate-500 mt-1">
+                Adds +15 min to transit time
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {DELAY_REASONS.map((reason) => (
+                <button
+                  key={reason}
+                  disabled={delayBusy}
+                  onClick={async () => {
+                    setDelayBusy(true);
+                    try {
+                      const { supabase } = await import("@/app/lib/supabase");
+                      const now = new Date().toISOString();
+
+                      // Update all assets for this manifest:
+                      // bump transit_delay_minutes and log to custody history
+                      if (manifestGroupId) {
+                        const { data: rows } = await supabase
+                          .from("assets")
+                          .select("asset_serial, transit_delay_minutes, custody_history")
+                          .eq("manifest_group_id", manifestGroupId);
+
+                        for (const row of rows || []) {
+                          const priorMin = row.transit_delay_minutes || 0;
+                          const priorLog = row.custody_history || [];
+                          await supabase
+                            .from("assets")
+                            .update({
+                              transit_delay_minutes: priorMin + 15,
+                              delay_reason: reason,
+                              custody_history: [
+                                ...priorLog,
+                                {
+                                  timestamp: now,
+                                  state: `TRANSIT_DELAY_(${reason
+                                    .toUpperCase()
+                                    .replace(/\s+/g, "_")})`,
+                                  custody: "TRANSIT LOGISTICS (Driver)",
+                                },
+                              ],
+                            })
+                            .eq("asset_serial", row.asset_serial)
+                            .eq("manifest_group_id", manifestGroupId);
+                        }
+                      }
+
+                      onDelayLogged?.(reason, 15);
+                      setDelayOpen(false);
+                      setDelayBusy(false);
+                    } catch (err) {
+                      console.error("Failed to log delay:", err);
+                      setDelayBusy(false);
+                    }
+                  }}
+                  className="w-full text-left bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-slate-200 text-sm font-bold py-3 px-4 rounded-lg border border-slate-700 transition"
+                >
+                  {reason}
+                </button>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setDelayOpen(false)}
+              disabled={delayBusy}
+              className="w-full text-xs text-slate-400 hover:text-slate-200 py-2 disabled:opacity-50"
+            >
+              ✕ Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Map fills the rest */}
       <div className="relative flex-1">

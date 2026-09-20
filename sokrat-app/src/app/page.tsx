@@ -1524,26 +1524,7 @@ onClick={() => {
           </div>
         )}
 
-        <div className="bg-slate-950 p-2 border border-slate-800 rounded-lg flex items-center justify-between gap-3 text-xs">
-          <span className="text-slate-400 text-[10px]">Adjust Target Yield Allocation Volume:</span>
-          <div className="flex gap-2">
-            <select
-              value={inputBatchSize}
-              onChange={(e) => setInputBatchSize(parseInt(e.target.value) || 1)}
-              className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-cyan-400 font-mono text-xs font-bold focus:outline-none cursor-pointer"
-            >
-              {Array.from({ length: 30 }, (_, i) => i + 1).map((num) => (
-                <option key={num} value={num}>{num} Panels</option>
-              ))}
-            </select>
-            <button
-              onClick={handleRebuildCustomBatch}
-              className="bg-slate-800 hover:bg-slate-700 px-2.5 py-1 rounded text-[11px] text-slate-200 border border-slate-700 transition"
-            >
-              🔨 Regenerate Pool
-            </button>
-          </div>
-        </div>
+
 
         {/* RAMCO-Fed Certificates (read-only) */}
         <RamcoSyncPanel
@@ -2121,6 +2102,21 @@ onSelectTask={(task) => {
         siteLng={selectedTask?.site_longitude ?? null}
         siteName={selectedTask?.site_name || "Site"}
         vehiclePlate={manifest.vehicle.plateNumber}
+      />
+            <FullScreenNav
+        isOpen={showFullScreenNav}
+        onClose={() => setShowFullScreenNav(false)}
+        driverLat={selectedTask?.driver_current_lat ?? null}
+        driverLng={selectedTask?.driver_current_lng ?? null}
+        siteLat={selectedTask?.site_latitude ?? null}
+        siteLng={selectedTask?.site_longitude ?? null}
+        siteName={selectedTask?.site_name || "Site"}
+        vehiclePlate={manifest.vehicle.plateNumber}
+        manifestGroupId={manifest.manifest_group_id}
+        onDelayLogged={(reason, minutes) => {
+          // Refresh local assets so the delay is reflected immediately
+          loadAssetsForTask(manifest.manifest_group_id);
+        }}
       />
                     </div>
                   )}
