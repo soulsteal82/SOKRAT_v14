@@ -2479,25 +2479,40 @@ onSelectTask={(task) => {
 
        
       </div>
-              {/* Delivery Note Modal */}
-        <DeliveryNoteModal
-          isOpen={showDeliveryNote}
-          onClose={() => setShowDeliveryNote(false)}
-          manifestId={manifest.manifest_group_id}
-          driverName={manifest.driver.name}
-          driverPhone={manifest.driver.phone}
-          vehiclePlate={manifest.vehicle.plateNumber}
-          vehicleTrailerType={manifest.vehicle.trailerType}
-          siteName={selectedTask?.site_name || "Project Site"}
-          siteAddress={selectedTask?.site_name || "Abu Dhabi, UAE"}
-          inspectorName={manifest.siteInspector.name}
-          inspectorPhone={manifest.siteInspector.phone}
-          orderDetails={
-            (selectedTask as any)?.order_details || []
-          }
-          assignedAt={selectedTask?.assigned_at}
-          factory={selectedTask?.factories?.[0]?.factory_name || null}
-        />
+
+      {/* Delivery Note Modal */}
+      <DeliveryNoteModal
+        isOpen={showDeliveryNote}
+        onClose={() => setShowDeliveryNote(false)}
+        manifestId={manifest.manifest_group_id}
+        driverName={manifest.driver.name}
+        driverPhone={manifest.driver.phone}
+        vehiclePlate={manifest.vehicle.plateNumber}
+        vehicleTrailerType={manifest.vehicle.trailerType}
+        siteName={selectedTask?.site_name || "Project Site"}
+        siteAddress={selectedTask?.site_name || "Abu Dhabi, UAE"}
+        inspectorName={manifest.siteInspector.name}
+        inspectorPhone={manifest.siteInspector.phone}
+        orderDetails={(selectedTask as any)?.order_details || []}
+        assignedAt={selectedTask?.assigned_at}
+        factory={selectedTask?.factories?.[0]?.factory_name || null}
+      />
+
+      {/* Full-screen navigation overlay (top-level modal) */}
+      <FullScreenNav
+        isOpen={showFullScreenNav}
+        onClose={() => setShowFullScreenNav(false)}
+        driverLat={selectedTask?.driver_current_lat ?? null}
+        driverLng={selectedTask?.driver_current_lng ?? null}
+        siteLat={selectedTask?.site_latitude ?? null}
+        siteLng={selectedTask?.site_longitude ?? null}
+        siteName={selectedTask?.site_name || "Site"}
+        vehiclePlate={manifest.vehicle.plateNumber}
+        manifestGroupId={manifest.manifest_group_id}
+        onDelayLogged={() => {
+          loadAssetsForTask(manifest.manifest_group_id);
+        }}
+      />
     </div>
   );
 }
