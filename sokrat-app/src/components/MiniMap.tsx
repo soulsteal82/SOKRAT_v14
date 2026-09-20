@@ -8,7 +8,42 @@ import {
   RouteResult,
   TrafficSegment,
 } from "@/app/lib/routing";
-
+const FitBounds = dynamic(
+  () => import("react-leaflet").then((m) => {
+    // Custom wrapper that doesn't need to be a component — return a component
+    // that uses the useMap hook internally
+    const { useMap } = m as any;
+    return function FitBoundsInner({
+      points,
+    }: {
+      points: [number, number][];
+    }) {
+      const map = useMap();
+      useEffect(() => {
+        if (!map || points.length < 2) return;
+        // Filter to valid coordinates
+        const valid = points.filter(
+          ([lat, lng]) =>
+            typeof lat === "number" &&
+            typeof lng === "number" &&
+            !isNaN(lat) &&
+            !isNaN(lng)
+        );
+        if (valid.length < 2) return;
+        try {
+          map.fitBounds(valid as any, {
+            padding: [30, 30],
+            maxZoom: 14,
+          });
+        } catch (e) {
+          console.warn("[MiniMap] fitBounds failed", e);
+        }
+      }, [map, JSON.stringify(points)]);
+      return null;
+    };
+  }),
+  { ssr: false }
+);
 const MapContainer = dynamic(
   () => import("react-leaflet").then((mod) => mod.MapContainer),
   { ssr: false }
@@ -249,6 +284,15 @@ export default function MiniMap({
           dragging={true}
           zoomControl={true}
         >
+          {/* Auto-fit to show both origin and destination */}
+          <FitBounds
+            points={
+              [
+                originPoint,
+                [siteLat, siteLng],
+              ].filter(Boolean) as [number, number][]
+            }
+          />
           <TileLayer
             attribution='&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
             url={`https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png?api_key=${process.env.NEXT_PUBLIC_STADIA_API_KEY || ""}`}
