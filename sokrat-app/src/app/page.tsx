@@ -1409,6 +1409,10 @@ const saveTaskState = async (
           mix2_url: null,
           delivery_note_url: null,
           delivery_note_file_name: null,
+          site_latitude: null,
+          site_longitude: null,
+          site_gps_source: null,
+          site_gps_updated_at: null,
         })
         .neq("manifest_group_id", "");
 
@@ -1649,6 +1653,8 @@ onClick={() => {
           epd2_file_name={currentAsset?.epd2_file_name}
           mix2_url={currentAsset?.mix2_certificate_url}
           mix2_file_name={currentAsset?.mix2_file_name}
+                    delivery_note_url={manifest.delivery_note_url}
+          delivery_note_file_name={manifest.delivery_note_file_name}
           ramco_synced_at={null}
           isDemoMode={typeof window !== "undefined" && window.location.search.includes("demo=1")}
         />
@@ -2046,98 +2052,7 @@ onSelectTask={(task) => {
               </span>
             </div>
                         
-            {profile === "INSPECTOR" && !currentAsset?.hasScannedQR ? (
-              <div className="col-span-2 py-1 bg-slate-900/40 border border-slate-800/80 rounded text-center text-[10px] text-slate-500 font-mono italic">
-                🔒 Engineering documents and EPD compliance locks hidden until target QR validation is executed.
-              </div>
-            ) : (
-              <>
-                <div className="flex justify-between text-slate-400">
-                  <span>EPD 1:</span>
-                  {currentAsset?.epd1_certificate_url ? (
-                    <a
-                      href={currentAsset?.epd1_certificate_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-cyan-400 underline font-bold text-[9px] truncate max-w-[120px]"
-                      title={currentAsset?.epd1_file_name || currentAsset?.epd1_certificate_url}
-                    >
-                      📄 {currentAsset?.epd1_file_name || 'Document'} ↗
-                    </a>
-                  ) : (
-                    <span className="text-amber-500 font-medium italic">NOT_UPLOADED</span>
-                  )}
-                </div>
-                <div className="flex justify-between text-slate-400">
-                  <span>Mix Design 1:</span>
-                  {currentAsset?.mix1_certificate_url ? (
-                    <a
-                      href={currentAsset?.mix1_certificate_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-cyan-400 underline font-bold text-[9px] truncate max-w-[120px]"
-                      title={currentAsset?.mix1_file_name || currentAsset?.mix1_certificate_url}
-                    >
-                      📄 {currentAsset?.mix1_file_name || 'Document'} ↗
-                    </a>
-                  ) : (
-                    <span className="text-amber-500 font-medium italic">NOT_UPLOADED</span>
-                  )}
-                </div>
-                {currentAsset?.epd2_certificate_url && (
-                  <div className="flex justify-between text-slate-400">
-                    <span>EPD 2:</span>
-                    <a
-                      href={currentAsset?.epd2_certificate_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-cyan-400 underline font-bold text-[9px] truncate max-w-[120px]"
-                      title={currentAsset?.epd2_file_name || currentAsset?.epd2_certificate_url}
-                    >
-                      📄 {currentAsset?.epd2_file_name || 'Document'} ↗
-                    </a>
-                  </div>
-                )}
-                {currentAsset?.mix2_certificate_url && (
-                  <div className="flex justify-between text-slate-400">
-                    <span>Mix Design 2:</span>
-                    <a
-                      href={currentAsset?.mix2_certificate_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-cyan-400 underline font-bold text-[9px] truncate max-w-[120px]"
-                      title={currentAsset?.mix2_file_name || currentAsset?.mix2_certificate_url}
-                    >
-                      📄 {currentAsset?.mix2_file_name || 'Document'} ↗
-                    </a>
-                  </div>
-                )}
-                {/* Delivery Note in documents section */}
-                {manifest.delivery_note_url && (
-                  <div className="flex justify-between text-slate-400 border-t border-slate-800/40 pt-1">
-                    <span>📋 Delivery Note:</span>
-                    <a
-                      href={manifest.delivery_note_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-cyan-400 underline font-bold text-[9px]"
-                    >
-                      📄 {manifest.delivery_note_file_name || 'View Document'} ↗
-                    </a>
-                  </div>
-                )}
-                {!currentAsset?.epd1_certificate_url && 
-                 !currentAsset?.mix1_certificate_url && 
-                 !currentAsset?.epd2_certificate_url && 
-                 !currentAsset?.mix2_certificate_url &&
-                 !manifest.delivery_note_url && (
-                  <div className="text-[9px] text-slate-500 italic text-center">
-                    No documents uploaded (all optional)
-                  </div>
-                )}
-              </>
-            )}
-            {/* Time Tracking per Phase */}
+              {/* Time Tracking per Phase */}
             <div className="pt-1.5 border-t border-slate-900 grid grid-cols-3 text-[9px] text-slate-500 text-center font-mono">
               <div>
                 🏭 Factory:
@@ -2318,48 +2233,105 @@ onSelectTask={(task) => {
                     }}
                   />
                   <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg text-xs space-y-1.5">
-                    <label className="flex items-center space-x-2 cursor-pointer text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={checkedEPD}
-                        disabled={currentAsset?.state === "INSTALLATION_COMPLETED" || !currentAsset?.hasScannedQR}
-                        onChange={(e) => setCheckedEPD(e.target.checked)}
-                        className="rounded accent-cyan-500 disabled:opacity-30"
-                      />
-                      <span className={!currentAsset?.hasScannedQR ? "text-slate-600 italic" : ""}>
-                        Verify Twin Life Cycle Assessment (LCA / EPD Compliance)
-                      </span>
-                    </label>
-                    <label className="flex items-center space-x-2 cursor-pointer text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={checkedMixDesign}
-                        disabled={currentAsset?.state === "INSTALLATION_COMPLETED" || !currentAsset?.hasScannedQR}
-                        onChange={(e) => setCheckedMixDesign(e.target.checked)}
-                        className="rounded accent-cyan-500 disabled:opacity-30"
-                      />
-                      <span className={!currentAsset?.hasScannedQR ? "text-slate-600 italic" : ""}>
-                        Verify High-Performance Structural Mix Design Specs
-                      </span>
-                    </label>
-                    {/* Delivery Note Verification Checkbox */}
-                    <label className="flex items-center space-x-2 cursor-pointer text-slate-300">
-                      <input
-                        type="checkbox"
-                        checked={checkedDeliveryNote}
-                        disabled={currentAsset?.state === "INSTALLATION_COMPLETED" || !currentAsset?.hasScannedQR || !manifest.delivery_note_url}
-                        onChange={(e) => setCheckedDeliveryNote(e.target.checked)}
-                        className="rounded accent-cyan-500 disabled:opacity-30"
-                      />
-                      <span className={
-                        !currentAsset?.hasScannedQR ? "text-slate-600 italic" :
-                        !manifest.delivery_note_url ? "text-amber-500 italic" :
-                        ""
-                      }>
-                        {!manifest.delivery_note_url ? "⚠️ Verify Delivery Note (No note uploaded)" : "📋 Verify Delivery Note"}
-                      </span>
-                    </label>
-                  </div>
+  {/* Compute document presence + scan state once, so both the checkbox
+      and its label use the same rule. */}
+  {(() => {
+    const scanned = !!currentAsset?.hasScannedQR;
+    const completed = currentAsset?.state === "INSTALLATION_COMPLETED";
+
+    const hasEpd =
+      !!(currentAsset?.epd1_certificate_url || currentAsset?.epd2_certificate_url);
+    const hasMix =
+      !!(currentAsset?.mix1_certificate_url || currentAsset?.mix2_certificate_url);
+    const hasDeliveryNote = !!manifest.delivery_note_url;
+
+    const epdEnabled = scanned && hasEpd && !completed;
+    const mixEnabled = scanned && hasMix && !completed;
+    const noteEnabled = scanned && hasDeliveryNote && !completed;
+
+    return (
+      <>
+        {/* Verify EPD */}
+        <label className="flex items-center space-x-2 cursor-pointer text-slate-300">
+          <input
+            type="checkbox"
+            checked={checkedEPD}
+            disabled={!epdEnabled}
+            onChange={(e) => setCheckedEPD(e.target.checked)}
+            className="rounded accent-cyan-500 disabled:opacity-30"
+          />
+          <span
+            className={
+              !scanned
+                ? "text-slate-600 italic"
+                : !hasEpd
+                ? "text-amber-500 italic"
+                : ""
+            }
+          >
+            {!scanned
+              ? "Verify Twin Life Cycle Assessment (LCA / EPD Compliance)"
+              : !hasEpd
+              ? "⚠️ Verify EPD — awaiting RAMCO"
+              : "Verify Twin Life Cycle Assessment (LCA / EPD Compliance)"}
+          </span>
+        </label>
+
+        {/* Verify Mix Design */}
+        <label className="flex items-center space-x-2 cursor-pointer text-slate-300">
+          <input
+            type="checkbox"
+            checked={checkedMixDesign}
+            disabled={!mixEnabled}
+            onChange={(e) => setCheckedMixDesign(e.target.checked)}
+            className="rounded accent-cyan-500 disabled:opacity-30"
+          />
+          <span
+            className={
+              !scanned
+                ? "text-slate-600 italic"
+                : !hasMix
+                ? "text-amber-500 italic"
+                : ""
+            }
+          >
+            {!scanned
+              ? "Verify High-Performance Structural Mix Design Specs"
+              : !hasMix
+              ? "⚠️ Verify Mix Design — awaiting RAMCO"
+              : "Verify High-Performance Structural Mix Design Specs"}
+          </span>
+        </label>
+
+        {/* Verify Delivery Note */}
+        <label className="flex items-center space-x-2 cursor-pointer text-slate-300">
+          <input
+            type="checkbox"
+            checked={checkedDeliveryNote}
+            disabled={!noteEnabled}
+            onChange={(e) => setCheckedDeliveryNote(e.target.checked)}
+            className="rounded accent-cyan-500 disabled:opacity-30"
+          />
+          <span
+            className={
+              !scanned
+                ? "text-slate-600 italic"
+                : !hasDeliveryNote
+                ? "text-amber-500 italic"
+                : ""
+            }
+          >
+            {!scanned
+              ? "📋 Verify Delivery Note"
+              : !hasDeliveryNote
+              ? "⚠️ Verify Delivery Note — awaiting RAMCO"
+              : "📋 Verify Delivery Note"}
+          </span>
+        </label>
+      </>
+    );
+  })()}
+</div>
 
                   <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg">
                     <span className="block text-[8px] text-slate-400 uppercase font-bold mb-2">

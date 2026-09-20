@@ -22,6 +22,8 @@ type Props = {
   mix2_file_name?: string | null;
   ramco_synced_at?: string | null;
   isDemoMode?: boolean;
+    delivery_note_url?: string | null;
+  delivery_note_file_name?: string | null;
 };
 
 export default function RamcoSyncPanel({
@@ -35,16 +37,19 @@ export default function RamcoSyncPanel({
   mix2_file_name,
   ramco_synced_at,
   isDemoMode = false,
+  delivery_note_url,
+  delivery_note_file_name,
 }: Props) {
   const certs = [
     { label: "EPD 1", url: epd1_url, fileName: epd1_file_name },
     { label: "Mix Design 1", url: mix1_url, fileName: mix1_file_name },
     { label: "EPD 2", url: epd2_url, fileName: epd2_file_name },
     { label: "Mix Design 2", url: mix2_url, fileName: mix2_file_name },
+    { label: "📋 Delivery Note", url: delivery_note_url, fileName: delivery_note_file_name },
   ];
 
   const syncedCount = certs.filter((c) => c.url).length;
-  const allSynced = syncedCount === 4;
+  const allSynced = syncedCount === certs.length;
 
   const timeAgo = (iso: string | null | undefined) => {
     if (!iso) return "—";
