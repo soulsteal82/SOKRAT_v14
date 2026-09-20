@@ -1874,6 +1874,21 @@ onSelectTask={(task) => {
               </button>
             )}
 
+            {/* Full navigation card with traffic + turn-by-turn (driver only) */}
+            {currentAsset?.state?.startsWith("DISPATCHED") &&
+             selectedTask.site_latitude &&
+             selectedTask.site_longitude && (
+              <NavigationPanel
+                driverLat={selectedTask.driver_current_lat ?? null}
+                driverLng={selectedTask.driver_current_lng ?? null}
+                siteLat={selectedTask.site_latitude}
+                siteLng={selectedTask.site_longitude}
+                siteName={selectedTask.site_name || "Site"}
+                isActive={true}
+                onOpenFullScreen={() => setShowFullScreenNav(true)}
+              />
+            )}
+
             {/* System actions (delay, arrived, etc.) — compact strip */}
             <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-2">
               <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold">

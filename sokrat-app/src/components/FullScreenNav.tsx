@@ -273,10 +273,10 @@ export default function FullScreenNav({
             dragging={true}
             zoomControl={true}
           >
-                 <TileLayer
+             <TileLayer
               attribution="&copy; OpenStreetMap contributors"
-              url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
-              subdomains={["a", "b", "c", "d"]}
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              subdomains={["a", "b", "c"]}
             />
 
             {/* Route: colored traffic segments */}
