@@ -17,6 +17,10 @@ const Marker = dynamic(
   () => import("react-leaflet").then((m) => m.Marker),
   { ssr: false }
 );
+const Popup = dynamic(
+  () => import("react-leaflet").then((m) => m.Popup),
+  { ssr: false }
+);
 
 // FitBounds helper (same pattern as MiniMap)
 const FitBounds = dynamic(
@@ -62,6 +66,15 @@ type Vehicle = {
   driver_status: string | null;
   driver_last_update: string | null;
   current_state: string | null;
+  // enriched fields for the popup:
+  vehicle_plate: string | null;
+  vehicle_trailer_type: string | null;
+  vehicle_ownership: string | null;
+  selected_scope: string | null;
+  site_name: string | null;
+  site_lat: number | null;
+  site_lng: number | null;
+  panels_count: number;
 };
 
 // ---- Status → color mapping ----
@@ -84,7 +97,41 @@ function getStatusColor(state: string | null | undefined, fallback: string | nul
   if (fallback === "DELAYED") return "#ef4444";
   return "#64748b"; // slate
 }
+// ---- Haversine distance in metres ----
+function haversineMeters(
+  a: [number, number],
+  b: [number, number]
+): number {
+  const R = 6371000;
+  const lat1 = (a[0] * Math.PI) / 180;
+  const lat2 = (b[0] * Math.PI) / 180;
+  const dLat = ((b[0] - a[0]) * Math.PI) / 180;
+  const dLng = ((b[1] - a[1]) * Math.PI) / 180;
+  const x =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(x));
+}
 
+// ---- Very rough ETA estimate (assumes ~50 km/h avg) ----
+function estimateEtaMinutes(
+  lat: number,
+  lng: number,
+  siteLat: number | null,
+  siteLng: number | null
+): number | null {
+  if (siteLat == null || siteLng == null) return null;
+  const meters = haversineMeters([lat, lng], [siteLat, siteLng]);
+  const minutes = (meters / 1000 / 50) * 60;
+  return Math.max(1, Math.round(minutes));
+}
+
+function scopeLabel(scope: string | null | undefined): string {
+  if (scope === "FULL") return "🔵 Full Service";
+  if (scope === "FACTORY_ONLY") return "🏭 Factory Only";
+  if (scope === "DELIVERY_ONLY") return "🚚 Delivery Only";
+  return scope || "—";
+}
 function getStatusLabel(state: string | null | undefined, fallback: string | null) {
   const s = state || "";
   if (s.includes("REJECTED")) return "Rejected";
@@ -140,7 +187,7 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
     const { data: manifests } = await supabase
       .from("manifests")
       .select(
-        "manifest_group_id, driver_name, priority, driver_current_lat, driver_current_lng, driver_status, driver_last_update"
+        "manifest_group_id, driver_name, priority, driver_current_lat, driver_current_lng, driver_status, driver_last_update, vehicle_plate, vehicle_trailer_type, vehicle_ownership, selected_scope, site_name, site_latitude, site_longitude"
       );
 
     if (!manifests) return;
@@ -170,8 +217,11 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
     };
 
     const currentStateByManifest: Record<string, string> = {};
+    const panelCountByManifest: Record<string, number> = {};
+
     (assets || []).forEach((row: any) => {
       const id = row.manifest_group_id;
+      panelCountByManifest[id] = (panelCountByManifest[id] || 0) + 1;
       const prev = currentStateByManifest[id];
       if (prev === undefined || stateRank(row.state) < stateRank(prev)) {
         currentStateByManifest[id] = row.state;
@@ -196,6 +246,14 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
         driver_status: m.driver_status,
         driver_last_update: m.driver_last_update,
         current_state: currentStateByManifest[m.manifest_group_id] || "INITIALIZED",
+        vehicle_plate: m.vehicle_plate,
+        vehicle_trailer_type: m.vehicle_trailer_type,
+        vehicle_ownership: m.vehicle_ownership,
+        selected_scope: m.selected_scope,
+        site_name: m.site_name,
+        site_lat: m.site_latitude,
+        site_lng: m.site_longitude,
+        panels_count: panelCountByManifest[m.manifest_group_id] || 0,
       }));
 
     setVehicles(vlist);
@@ -321,13 +379,112 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
 
             {vehicles.map((v) => {
               const color = getStatusColor(v.current_state, v.driver_status);
+              const statusLabel = getStatusLabel(v.current_state, v.driver_status);
               const icon = buildVehicleIcon(color);
+              const etaMinutes = estimateEtaMinutes(
+                v.driver_lat,
+                v.driver_lng,
+                v.site_lat,
+                v.site_lng
+              );
+
+              const lastUpdated = v.driver_last_update
+                ? new Date(v.driver_last_update).toLocaleTimeString("en-GB", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "—";
+
               return (
                 <Marker
                   key={v.manifest_group_id}
                   position={[v.driver_lat, v.driver_lng]}
                   icon={icon}
-                />
+                >
+                  <Popup>
+                    <div className="text-xs space-y-1 min-w-[200px]">
+                      <div className="font-black text-sm text-slate-900 border-b border-slate-300 pb-1 mb-1">
+                        🚚 {v.manifest_group_id}
+                      </div>
+
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-500">Plate:</span>
+                        <span className="font-mono font-bold text-slate-900">
+                          {v.vehicle_plate || "—"}
+                          {v.vehicle_trailer_type
+                            ? ` · ${v.vehicle_trailer_type}`
+                            : ""}
+                        </span>
+                      </div>
+
+                      {v.vehicle_ownership && (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-slate-500">Ownership:</span>
+                          <span
+                            className={`font-bold ${
+                              v.vehicle_ownership === "OWNED"
+                                ? "text-green-700"
+                                : "text-amber-700"
+                            }`}
+                          >
+                            {v.vehicle_ownership}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-500">Driver:</span>
+                        <span className="font-bold text-slate-900">
+                          {v.driver_name || "—"}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-500">Panels:</span>
+                        <span className="font-bold text-cyan-700">
+                          {v.panels_count}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-500">Scope:</span>
+                        <span className="font-bold text-slate-900 text-[10px]">
+                          {scopeLabel(v.selected_scope)}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-500">Status:</span>
+                        <span
+                          className="font-bold text-[10px] px-1.5 py-0.5 rounded text-white"
+                          style={{ backgroundColor: color }}
+                        >
+                          {statusLabel}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between gap-3 border-t border-slate-200 pt-1 mt-1">
+                        <span className="text-slate-500">ETA:</span>
+                        <span className="font-bold text-slate-900">
+                          {etaMinutes != null ? `${etaMinutes} min` : "—"}
+                        </span>
+                      </div>
+
+                      {v.site_name && (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-slate-500">To:</span>
+                          <span className="font-medium text-slate-700 text-[10px] text-right max-w-[120px] truncate">
+                            {v.site_name}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="text-[9px] text-slate-400 text-center pt-1 border-t border-slate-200">
+                        Updated {lastUpdated}
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
               );
             })}
           </MapContainer>
