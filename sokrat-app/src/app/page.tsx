@@ -14,6 +14,7 @@ import RamcoSyncPanel from "@/components/RamcoSyncPanel";
 import SiteGpsButton from "@/components/SiteGpsButton";
 import NavigationPanel from "@/components/NavigationPanel";
 import FullScreenNav from "@/components/FullScreenNav";
+import PlannerDashboard from "@/components/PlannerDashboard";
 import { startDriverGpsBroadcast, DriverGpsHandle } from "@/app/lib/driverGps";
 import { supabase } from "../app/lib/supabase";
 
@@ -1858,25 +1859,10 @@ onSelectTask={(task) => {
             show the primary actions (nav + system) right here, before
             any diagnostics. This is what the driver actually needs.
             ═══════════════════════════════════════════════════════════ */}
-                    {/* ═══════════════════════════════════════════════════════════
-            PLANNER GOD-VIEW (Task 9b will fill this in)
+         {/* ═══════════════════════════════════════════════════════════
+            PLANNER GOD-VIEW
             ═══════════════════════════════════════════════════════════ */}
-        {profile === "PLANNER" && (
-          <div className="bg-slate-950 border border-purple-900/40 rounded-xl p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">📊</span>
-              <span className="text-sm font-black tracking-widest text-purple-300 uppercase">
-                Planner God-View
-              </span>
-              <span className="text-[9px] ml-auto text-slate-500 font-mono">
-                Task 9b will render the live table here
-              </span>
-            </div>
-            <div className="text-[10px] text-slate-500 text-center py-6 italic">
-              ⚙️ Building…
-            </div>
-          </div>
-        )}
+        {profile === "PLANNER" && <PlannerDashboard />}
         {profile === "DRIVER" && selectedTask && assets.length > 0 && (
           <div className="space-y-3">
             {/* Live GPS pill */}
