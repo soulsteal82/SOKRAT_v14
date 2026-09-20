@@ -204,7 +204,8 @@ export default function Home() {
   const [profile, setProfile] = useState<"DISPATCHER" | "DRIVER" | "INSPECTOR">("DISPATCHER");
   const [selectedTask, setSelectedTask] = useState<SelectedTaskData | null>(null);
     const [taskRefreshKey, setTaskRefreshKey] = useState(0);
-  const [showDeliveryNote, setShowDeliveryNote] = useState(false);
+      const custodyLogRef = useRef<HTMLDivElement | null>(null);
+   const [showDeliveryNote, setShowDeliveryNote] = useState(false);
   const [checkedEPD, setCheckedEPD] = useState(false);
   const [checkedMixDesign, setCheckedMixDesign] = useState(false);
   const [checkedDeliveryNote, setCheckedDeliveryNote] = useState(false);
@@ -334,6 +335,13 @@ export default function Home() {
 const currentAsset = assets.length > 0 
   ? (assets.find(a => a.id === activeAssetId) || assets[0])
   : null;
+
+  // Auto-scroll the custody log to the bottom whenever new entries arrive
+  useEffect(() => {
+    if (custodyLogRef.current) {
+      custodyLogRef.current.scrollTop = custodyLogRef.current.scrollHeight;
+    }
+  }, [currentAsset?.custodyHistory?.length]);
   // ============================================
   // PHASE 2: Load assets (panels) from Supabase for a task
   // ============================================
@@ -1831,7 +1839,10 @@ onSelectTask={(task) => {
 {getAssetCustody(currentAsset?.state, selectedTask)}
               </span>
             </div>
-            <div className="space-y-1 max-h-20 overflow-y-auto pr-1 font-mono text-[9px] text-slate-400 scrollbar-thin">
+            <div
+              ref={custodyLogRef}
+              className="space-y-1 max-h-40 overflow-y-auto pr-1 font-mono text-[9px] text-slate-400 scrollbar-thin"
+            >
               {currentAsset?.custodyHistory?.map((log, i) => (
                 <div key={i} className="flex justify-between">
                   <span>[{log.timestamp || "—"}] {log.state}</span>
