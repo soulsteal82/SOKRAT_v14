@@ -204,8 +204,8 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 export default function Home() {
-  const [profile, setProfile] = useState<"DISPATCHER" | "DRIVER" | "INSPECTOR">("DISPATCHER");
-  const [selectedTask, setSelectedTask] = useState<SelectedTaskData | null>(null);
+  const [profile, setProfile] = useState<"DISPATCHER" | "DRIVER" | "INSPECTOR" | "PLANNER">("DISPATCHER");
+    const [selectedTask, setSelectedTask] = useState<SelectedTaskData | null>(null);
     const [taskRefreshKey, setTaskRefreshKey] = useState(0);
       const custodyLogRef = useRef<HTMLDivElement | null>(null);
         const [showFullScreenNav, setShowFullScreenNav] = useState(false);
@@ -1760,6 +1760,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
               <option value="DISPATCHER">DISPATCHER NODE (Plant)</option>
               <option value="DRIVER">DRIVER NODE (Transit Log)</option>
               <option value="INSPECTOR">INSPECTOR NODE (Site Structure)</option>
+              <option value="PLANNER">PLANNER NODE (RAMCO God-View)</option>
             </select>
           </div>
         </div>
@@ -1770,7 +1771,9 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
               ? "Khalid Al Suwaidi"
               : profile === "DRIVER"
               ? "Mohammed Ali"
-              : "Yusuf Al Hamadi"
+              : profile === "INSPECTOR"
+              ? "Yusuf Al Hamadi"
+              : "Abid"  /* PLANNER */
           }
           userRole={profile}
           selectedTaskId={selectedTask?.task_id || null}
@@ -1855,6 +1858,25 @@ onSelectTask={(task) => {
             show the primary actions (nav + system) right here, before
             any diagnostics. This is what the driver actually needs.
             ═══════════════════════════════════════════════════════════ */}
+                    {/* ═══════════════════════════════════════════════════════════
+            PLANNER GOD-VIEW (Task 9b will fill this in)
+            ═══════════════════════════════════════════════════════════ */}
+        {profile === "PLANNER" && (
+          <div className="bg-slate-950 border border-purple-900/40 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-2xl">📊</span>
+              <span className="text-sm font-black tracking-widest text-purple-300 uppercase">
+                Planner God-View
+              </span>
+              <span className="text-[9px] ml-auto text-slate-500 font-mono">
+                Task 9b will render the live table here
+              </span>
+            </div>
+            <div className="text-[10px] text-slate-500 text-center py-6 italic">
+              ⚙️ Building…
+            </div>
+          </div>
+        )}
         {profile === "DRIVER" && selectedTask && assets.length > 0 && (
           <div className="space-y-3">
             {/* Live GPS pill */}
