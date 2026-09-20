@@ -1,12 +1,15 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "../app/lib/supabase";
 import { reverseGeocode } from "../app/lib/geocode";
+import { fetchRoute } from "../app/lib/routing";
+import { simulateDriverAlongRoute } from "../app/lib/simulate";
 import React from "react";
 import dynamic from "next/dynamic";
 
 const MiniMap = dynamic(() => import("./MiniMap"), { ssr: false });
+
 type Factory = {
   factory_id: string;
   factory_name: string;
@@ -14,6 +17,8 @@ type Factory = {
   panels_count: number;
   loading_order: number;
   status?: string;
+  lat?: number;
+  lng?: number;
 };
 
 export type SelectedTaskData = {
@@ -28,48 +33,40 @@ export type SelectedTaskData = {
   factories: Factory[];
   current_stage?: number | null;
 
-  // Driver
   driver_name?: string | null;
   driver_phone?: string | null;
   driver_rating?: number | null;
   driver_total_trips?: number | null;
 
-  // Vehicle
   vehicle_plate?: string | null;
   vehicle_trailer_type?: string | null;
   vehicle_ownership?: string | null;
 
-  // Inspector
   inspector_name?: string | null;
   inspector_phone?: string | null;
   inspector_email?: string | null;
 
-  // GPS
   driver_current_lat?: number | null;
   driver_current_lng?: number | null;
   driver_last_update?: string | null;
   driver_status?: string | null;
 
-  // Site
   site_name?: string | null;
   site_latitude?: number | null;
   site_longitude?: number | null;
-    site_gps_source?: string | null;
+  site_gps_source?: string | null;
   site_gps_updated_at?: string | null;
 
-  // PER-TASK DISPATCHER STATE (new)
   selected_scope?: string | null;
   selected_defect?: string | null;
   dispatcher_panels_count?: number | null;
   dispatcher_notes?: string | null;
 
-  // Certificates
   epd1_url?: string | null;
   mix1_url?: string | null;
   epd2_url?: string | null;
   mix2_url?: string | null;
 
-  // Delivery note
   delivery_note_url?: string | null;
   delivery_note_file_name?: string | null;
 };
@@ -88,7 +85,8 @@ type Props = {
   selectedTaskId?: string | null;
   onSelectTask?: (task: SelectedTaskData | null) => void;
 };
-// ---- Site label: reverse-geocoded place name from coordinates ----
+
+// ---- Reverse-geocoded site label ----
 function useSiteLabel(
   lat: number | null | undefined,
   lng: number | null | undefined
@@ -111,9 +109,9 @@ function useSiteLabel(
 
   return label;
 }
+
 function SiteRow({ task }: { task: UserTask }) {
   const geoLabel = useSiteLabel(task.site_latitude, task.site_longitude);
-
   const hasCoords = task.site_latitude != null && task.site_longitude != null;
 
   let display: string;
@@ -138,9 +136,7 @@ function SiteRow({ task }: { task: UserTask }) {
         <span className="text-slate-500">📍 Site:</span>
         <span
           className={`text-right ${
-            hasCoords
-              ? "text-slate-200"
-              : "text-amber-500 italic"
+            hasCoords ? "text-slate-200" : "text-amber-500 italic"
           }`}
         >
           {display}
@@ -156,7 +152,6 @@ function SiteRow({ task }: { task: UserTask }) {
           </span>
         </div>
       )}
-      {/* Source badge */}
       {hasCoords && task.site_gps_source && (
         <div className="grid grid-cols-2 gap-1">
           <span className="text-slate-600 text-[8px]">Source:</span>
@@ -178,6 +173,7 @@ function SiteRow({ task }: { task: UserTask }) {
     </div>
   );
 }
+
 const formatTimestamp = (timestamp: string) => {
   if (!timestamp) return "N/A";
   const date = new Date(timestamp);
@@ -213,30 +209,93 @@ export default function TaskDashboard({
   const [loading, setLoading] = useState(true);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 
-    const loadTasks = async () => {
-      const { data: taskData, error: taskError } = await supabase
-        .from("user_tasks")
-        .select("*")
-        .eq("user_name", userName)
-        .eq("user_role", userRole)
-         .order("manifest_group_id", { ascending: true });
+  // Demo-only simulated driver position
+  const [simPos, setSimPos] = useState<{
+    taskId: string;
+    lat: number;
+    lng: number;
+  } | null>(null);
+  const [simRunning, setSimRunning] = useState(false);
+  const simCancelRef = useRef<(() => void) | null>(null);
 
-      if (taskError || !taskData) {
-        setLoading(false);
-        return;
-      }
+  const isDemoMode =
+    typeof window !== "undefined" &&
+    window.location.search.includes("demo=1");
 
-      const manifestIds = taskData.map((t) => t.manifest_group_id);
+  const startSimulation = async (task: UserTask) => {
+    if (!task.site_latitude || !task.site_longitude) {
+      alert("Task has no site coordinates yet.");
+      return;
+    }
 
-      const { data: manifestData } = await supabase
-        .from("manifests")
-        .select(
-          "manifest_group_id, factories, order_details, current_stage, driver_name, driver_phone, driver_rating, driver_total_trips, vehicle_plate, vehicle_trailer_type, vehicle_ownership, inspector_name, inspector_phone, inspector_email, driver_current_lat, driver_current_lng, driver_last_update, driver_status, site_name, site_latitude, site_longitude, site_gps_source, site_gps_updated_at, selected_scope, selected_defect, dispatcher_panels_count, dispatcher_notes, epd1_url, mix1_url, epd2_url, mix2_url, delivery_note_url, delivery_note_file_name"
-                  )
-        .in("manifest_group_id", manifestIds);
-        
-            // Also fetch live driver ratings
-    const driverNames = [...new Set(taskData.map(t => t.driver_name).filter(Boolean))];
+    const origin: [number, number] | null =
+      task.factories?.[0]?.lat && task.factories?.[0]?.lng
+        ? [task.factories[0].lat!, task.factories[0].lng!]
+        : task.driver_current_lat && task.driver_current_lng
+        ? [task.driver_current_lat, task.driver_current_lng]
+        : null;
+
+    if (!origin) {
+      alert("No origin GPS available (factory or driver).");
+      return;
+    }
+
+    const route = await fetchRoute(origin, [
+      task.site_latitude,
+      task.site_longitude,
+    ]);
+
+    simCancelRef.current?.();
+    setSimRunning(true);
+
+    const cancel = simulateDriverAlongRoute({
+      route: route.coordinates,
+      durationMs: 20000,
+      intervalMs: 400,
+      onTick: (lat, lng) => {
+        setSimPos({ taskId: task.id, lat, lng });
+      },
+      onDone: () => {
+        setSimRunning(false);
+        simCancelRef.current = null;
+      },
+    });
+
+    simCancelRef.current = cancel;
+  };
+
+  const stopSimulation = () => {
+    simCancelRef.current?.();
+    simCancelRef.current = null;
+    setSimRunning(false);
+    setSimPos(null);
+  };
+
+  const loadTasks = async () => {
+    const { data: taskData, error: taskError } = await supabase
+      .from("user_tasks")
+      .select("*")
+      .eq("user_name", userName)
+      .eq("user_role", userRole)
+      .order("manifest_group_id", { ascending: true });
+
+    if (taskError || !taskData) {
+      setLoading(false);
+      return;
+    }
+
+    const manifestIds = taskData.map((t) => t.manifest_group_id);
+
+    const { data: manifestData } = await supabase
+      .from("manifests")
+      .select(
+        "manifest_group_id, factories, order_details, current_stage, driver_name, driver_phone, driver_rating, driver_total_trips, vehicle_plate, vehicle_trailer_type, vehicle_ownership, inspector_name, inspector_phone, inspector_email, driver_current_lat, driver_current_lng, driver_last_update, driver_status, site_name, site_latitude, site_longitude, site_gps_source, site_gps_updated_at, selected_scope, selected_defect, dispatcher_panels_count, dispatcher_notes, epd1_url, mix1_url, epd2_url, mix2_url, delivery_note_url, delivery_note_file_name"
+      )
+      .in("manifest_group_id", manifestIds);
+
+    const driverNames = [
+      ...new Set(taskData.map((t) => t.driver_name).filter(Boolean)),
+    ];
     const { data: driverData } = await supabase
       .from("drivers")
       .select("name, rating, total_trips")
@@ -244,53 +303,58 @@ export default function TaskDashboard({
 
     const getDriverRating = (driverName: string | null | undefined) => {
       if (!driverName) return null;
-      const driver = driverData?.find((d) => d.name === driverName);
-      return driver;
+      return driverData?.find((d) => d.name === driverName);
     };
-      const enrichedTasks = taskData.map((task) => {
-        const manifest = manifestData?.find(
-          (m) => m.manifest_group_id === task.manifest_group_id
-        );
-        return {
-          ...task,
-          factories: manifest?.factories || [],
-          order_details: manifest?.order_details,
-          current_stage: manifest?.current_stage,
-          driver_name: manifest?.driver_name,
-          driver_phone: manifest?.driver_phone,
-          driver_rating: getDriverRating(manifest?.driver_name)?.rating ?? manifest?.driver_rating,
-          driver_total_trips: getDriverRating(manifest?.driver_name)?.total_trips ?? manifest?.driver_total_trips,
-          vehicle_plate: manifest?.vehicle_plate,
-          vehicle_trailer_type: manifest?.vehicle_trailer_type,
-          vehicle_ownership: manifest?.vehicle_ownership,
-          inspector_name: manifest?.inspector_name,
-          inspector_phone: manifest?.inspector_phone,
-          inspector_email: manifest?.inspector_email,
-          driver_current_lat: manifest?.driver_current_lat,
-          driver_current_lng: manifest?.driver_current_lng,
-          driver_last_update: manifest?.driver_last_update,
-          driver_status: manifest?.driver_status,
-          site_name: manifest?.site_name,
-          site_latitude: manifest?.site_latitude,
-          site_longitude: manifest?.site_longitude,
-                    site_gps_source: manifest?.site_gps_source,
-          site_gps_updated_at: manifest?.site_gps_updated_at,
-          selected_scope: manifest?.selected_scope,
-          selected_defect: manifest?.selected_defect,
-          dispatcher_panels_count: manifest?.dispatcher_panels_count,
-          dispatcher_notes: manifest?.dispatcher_notes,
-          epd1_url: manifest?.epd1_url,
-          mix1_url: manifest?.mix1_url,
-          epd2_url: manifest?.epd2_url,
-          mix2_url: manifest?.mix2_url,
-          delivery_note_url: manifest?.delivery_note_url,
-          delivery_note_file_name: manifest?.delivery_note_file_name,
-        };
-      });
 
-      setTasks(enrichedTasks);
-      setLoading(false);
-    };
+    const enrichedTasks: UserTask[] = taskData.map((task) => {
+      const manifest = manifestData?.find(
+        (m) => m.manifest_group_id === task.manifest_group_id
+      );
+      return {
+        ...task,
+        factories: manifest?.factories || [],
+        order_details: manifest?.order_details,
+        current_stage: manifest?.current_stage,
+        driver_name: manifest?.driver_name,
+        driver_phone: manifest?.driver_phone,
+        driver_rating:
+          getDriverRating(manifest?.driver_name)?.rating ??
+          manifest?.driver_rating,
+        driver_total_trips:
+          getDriverRating(manifest?.driver_name)?.total_trips ??
+          manifest?.driver_total_trips,
+        vehicle_plate: manifest?.vehicle_plate,
+        vehicle_trailer_type: manifest?.vehicle_trailer_type,
+        vehicle_ownership: manifest?.vehicle_ownership,
+        inspector_name: manifest?.inspector_name,
+        inspector_phone: manifest?.inspector_phone,
+        inspector_email: manifest?.inspector_email,
+        driver_current_lat: manifest?.driver_current_lat,
+        driver_current_lng: manifest?.driver_current_lng,
+        driver_last_update: manifest?.driver_last_update,
+        driver_status: manifest?.driver_status,
+        site_name: manifest?.site_name,
+        site_latitude: manifest?.site_latitude,
+        site_longitude: manifest?.site_longitude,
+        site_gps_source: manifest?.site_gps_source,
+        site_gps_updated_at: manifest?.site_gps_updated_at,
+        selected_scope: manifest?.selected_scope,
+        selected_defect: manifest?.selected_defect,
+        dispatcher_panels_count: manifest?.dispatcher_panels_count,
+        dispatcher_notes: manifest?.dispatcher_notes,
+        epd1_url: manifest?.epd1_url,
+        mix1_url: manifest?.mix1_url,
+        epd2_url: manifest?.epd2_url,
+        mix2_url: manifest?.mix2_url,
+        delivery_note_url: manifest?.delivery_note_url,
+        delivery_note_file_name: manifest?.delivery_note_file_name,
+      };
+    });
+
+    setTasks(enrichedTasks);
+    setLoading(false);
+  };
+
   useEffect(() => {
     loadTasks();
   }, [userName, userRole]);
@@ -317,23 +381,16 @@ export default function TaskDashboard({
     return "bg-slate-800 text-slate-400";
   };
 
-    const handleTaskClick = async (task: UserTask) => {
+  const handleTaskClick = async (task: UserTask) => {
     const isSame = expandedTaskId === task.id;
-    
 
     if (isSame) {
       setExpandedTaskId(null);
-          // Notify parent that no task is selected
-    if (onSelectTask) {
-      onSelectTask(null as any);
-    }
+      if (onSelectTask) onSelectTask(null as any);
       return;
     }
 
-    // Reload from Supabase to get fresh data
     await loadTasks();
-
-    // Then expand and pass data to parent
     setExpandedTaskId(task.id);
 
     if (onSelectTask) {
@@ -363,7 +420,7 @@ export default function TaskDashboard({
         site_name: task.site_name,
         site_latitude: task.site_latitude,
         site_longitude: task.site_longitude,
-                site_gps_source: task.site_gps_source,
+        site_gps_source: task.site_gps_source,
         site_gps_updated_at: task.site_gps_updated_at,
         selected_scope: task.selected_scope,
         selected_defect: task.selected_defect,
@@ -395,6 +452,7 @@ export default function TaskDashboard({
         {tasks.map((task) => {
           const isMultiFactory = task.factories && task.factories.length > 1;
           const isExpanded = expandedTaskId === task.id;
+          const isSimForThisTask = simPos?.taskId === task.id;
 
           return (
             <div
@@ -440,7 +498,6 @@ export default function TaskDashboard({
 
               {isExpanded && (
                 <div className="px-2 pb-2 space-y-1.5 border-t border-slate-800 pt-2">
-                  {/* Assignment metadata */}
                   <div className="grid grid-cols-2 gap-1 text-[9px]">
                     <div className="text-slate-500">👤 Assigned by:</div>
                     <div className="text-slate-200 text-right font-bold">
@@ -452,7 +509,6 @@ export default function TaskDashboard({
                     </div>
                   </div>
 
-                  {/* Per-task state summary */}
                   <div className="grid grid-cols-2 gap-1 text-[9px] border-t border-slate-800/60 pt-1">
                     <div className="text-slate-500">📋 Scope:</div>
                     <div className="text-cyan-400 text-right font-bold">
@@ -464,7 +520,6 @@ export default function TaskDashboard({
                     </div>
                   </div>
 
-                  {/* Driver details */}
                   {task.driver_name && (
                     <div className="grid grid-cols-2 gap-1 text-[9px] border-t border-slate-800/60 pt-1">
                       <div className="text-slate-500">🚚 Driver:</div>
@@ -493,7 +548,6 @@ export default function TaskDashboard({
                     </div>
                   )}
 
-                  {/* Vehicle details */}
                   {task.vehicle_plate && (
                     <div className="grid grid-cols-2 gap-1 text-[9px] border-t border-slate-800/60 pt-1">
                       <div className="text-slate-500">🚛 Plate:</div>
@@ -525,7 +579,6 @@ export default function TaskDashboard({
                     </div>
                   )}
 
-                  {/* Inspector details */}
                   {task.inspector_name && (
                     <div className="border-t border-slate-800/60 pt-1 text-[9px] space-y-0.5">
                       <div className="grid grid-cols-2 gap-1">
@@ -545,7 +598,6 @@ export default function TaskDashboard({
                     </div>
                   )}
 
-                  {/* Site — driven by coordinates */}
                   <SiteRow task={task} />
 
                   {task.trip_details?.panels_count && (
@@ -557,12 +609,10 @@ export default function TaskDashboard({
                     </div>
                   )}
 
-                  {/* Multi-factory */}
                   {isMultiFactory && userRole === "DISPATCHER" && (
                     <div className="space-y-1 border-t border-slate-800/60 pt-1">
                       {task.factories!.map((factory, idx) => {
-                        const isMyStage =
-                          factory.dispatcher_name === userName;
+                        const isMyStage = factory.dispatcher_name === userName;
                         return (
                           <div
                             key={idx}
@@ -603,30 +653,71 @@ export default function TaskDashboard({
                   )}
 
                   {/* Live Map */}
-                  {task.site_latitude &&
-                    task.site_longitude && (
-                      <div className="border-t border-slate-800/60 pt-1">
-                        <div className="flex justify-between text-[8px] mb-1">
-                          <span className="text-slate-500">🛰️ Updated:</span>
-                          <span className="text-slate-400">
-                            {task.driver_last_update
-                              ? timeSince(task.driver_last_update)
-                              : "GPS pending"}
-                          </span>
-                        </div>
-                        <div onClick={(e) => e.stopPropagation()}>
-                          <MiniMap
-                            driverLat={task.driver_current_lat}
-                            driverLng={task.driver_current_lng}
-                            driverStatus={task.driver_status}
-                            siteLat={task.site_latitude}
-                            siteLng={task.site_longitude}
-                            siteName={task.site_name || "Site"}
-                            height="160px"
-                          />
-                        </div>
+                  {task.site_latitude && task.site_longitude && (
+                    <div className="border-t border-slate-800/60 pt-1">
+                      <div className="flex justify-between text-[8px] mb-1">
+                        <span className="text-slate-500">🛰️ Updated:</span>
+                        <span className="text-slate-400">
+                          {task.driver_last_update
+                            ? timeSince(task.driver_last_update)
+                            : "GPS pending"}
+                        </span>
                       </div>
-                    )}
+
+                      {isDemoMode && (
+                        <div className="flex gap-1 mb-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              startSimulation(task);
+                            }}
+                            disabled={simRunning}
+                            className="flex-1 bg-amber-600 hover:bg-amber-500 text-slate-950 text-[8px] font-bold py-1 rounded disabled:opacity-40"
+                          >
+                            {simRunning && isSimForThisTask
+                              ? "🚚 Driving..."
+                              : "🔧 Simulate Driver GPS"}
+                          </button>
+                          {simRunning && isSimForThisTask && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                stopSimulation();
+                              }}
+                              className="bg-red-700 hover:bg-red-600 text-white text-[8px] font-bold px-2 py-1 rounded"
+                            >
+                              ■ Stop
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <MiniMap
+                          driverLat={
+                            isSimForThisTask
+                              ? simPos.lat
+                              : task.driver_current_lat
+                          }
+                          driverLng={
+                            isSimForThisTask
+                              ? simPos.lng
+                              : task.driver_current_lng
+                          }
+                          originLat={task.factories?.[0]?.lat ?? null}
+                          originLng={task.factories?.[0]?.lng ?? null}
+                          originLabel={
+                            task.factories?.[0]?.factory_name || "Factory"
+                          }
+                          driverStatus={task.driver_status}
+                          siteLat={task.site_latitude}
+                          siteLng={task.site_longitude}
+                          siteName={task.site_name || "Site"}
+                          height="160px"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>

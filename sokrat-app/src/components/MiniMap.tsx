@@ -31,6 +31,9 @@ const Popup = dynamic(
 type Props = {
   driverLat: number | null | undefined;
   driverLng: number | null | undefined;
+  originLat?: number | null | undefined;
+  originLng?: number | null | undefined;
+  originLabel?: string;
   driverStatus?: string | null;
   siteLat: number;
   siteLng: number;
@@ -42,6 +45,9 @@ type Props = {
 export default function MiniMap({
   driverLat,
   driverLng,
+  originLat,
+  originLng,
+  originLabel = "Origin",
   driverStatus,
   siteLat,
   siteLng,
@@ -99,16 +105,26 @@ export default function MiniMap({
     );
   }
 
-  const center: [number, number] =
-    driverLat && driverLng
-      ? [(driverLat + siteLat) / 2, (driverLng + siteLng) / 2]
-      : [siteLat, siteLng];
+  // Which origin do we use?
+  //   1. Driver's live GPS if available
+  //   2. Fallback origin (typically the factory) if provided
+  //   3. Site (no line drawn)
+  const useDriver = driverLat != null && driverLng != null;
+  const useFallback = !useDriver && originLat != null && originLng != null;
 
-  // Route with simulated traffic segments
+  const originPoint: [number, number] | null = useDriver
+    ? [driverLat!, driverLng!]
+    : useFallback
+    ? [originLat!, originLng!]
+    : null;
+
+  const center: [number, number] = originPoint
+    ? [(originPoint[0] + siteLat) / 2, (originPoint[1] + siteLng) / 2]
+    : [siteLat, siteLng];
+
+  // Build the polyline
   const fullRoute: [number, number][] = [];
-  if (driverLat && driverLng) {
-    fullRoute.push([driverLat, driverLng]);
-  }
+  if (originPoint) fullRoute.push(originPoint);
   fullRoute.push([siteLat, siteLng]);
 
   const getStatusLabel = () => {
@@ -182,13 +198,27 @@ export default function MiniMap({
             />
           )}
 
-          {driverLat && driverLng && icons.driverIcon && (
-            <Marker position={[driverLat, driverLng]} icon={icons.driverIcon}>
+          {/* Live driver marker */}
+          {useDriver && icons.driverIcon && (
+            <Marker position={[driverLat!, driverLng!]} icon={icons.driverIcon}>
               <Popup>
                 <div className="text-xs">
-                  <strong>🚚 Driver</strong>
+                  <strong>🚚 Driver (live)</strong>
                   <br />
-                  {driverLat.toFixed(4)}, {driverLng.toFixed(4)}
+                  {driverLat!.toFixed(4)}, {driverLng!.toFixed(4)}
+                </div>
+              </Popup>
+            </Marker>
+          )}
+
+          {/* Fallback origin marker (factory) — shown when driver GPS not yet available */}
+          {useFallback && icons.driverIcon && (
+            <Marker position={[originLat!, originLng!]} icon={icons.driverIcon}>
+              <Popup>
+                <div className="text-xs">
+                  <strong>🏭 {originLabel}</strong>
+                  <br />
+                  {originLat!.toFixed(4)}, {originLng!.toFixed(4)}
                 </div>
               </Popup>
             </Marker>
