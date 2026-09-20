@@ -13,6 +13,7 @@ import TaskDashboard, { SelectedTaskData } from "@/components/TaskDashboard";
 import RamcoSyncPanel from "@/components/RamcoSyncPanel";
 import SiteGpsButton from "@/components/SiteGpsButton";
 import NavigationPanel from "@/components/NavigationPanel";
+import FullScreenNav from "@/components/FullScreenNav";
 import { supabase } from "../app/lib/supabase";
 
 const DeliveryNoteModal = dynamic(
@@ -206,6 +207,7 @@ export default function Home() {
   const [selectedTask, setSelectedTask] = useState<SelectedTaskData | null>(null);
     const [taskRefreshKey, setTaskRefreshKey] = useState(0);
       const custodyLogRef = useRef<HTMLDivElement | null>(null);
+        const [showFullScreenNav, setShowFullScreenNav] = useState(false);
    const [showDeliveryNote, setShowDeliveryNote] = useState(false);
   const [checkedEPD, setCheckedEPD] = useState(false);
   const [checkedMixDesign, setCheckedMixDesign] = useState(false);
@@ -2044,6 +2046,7 @@ onSelectTask={(task) => {
                     siteLng={selectedTask?.site_longitude ?? null}
                     siteName={selectedTask?.site_name || "Site"}
                     isActive={currentAsset?.state.startsWith("DISPATCHED") ?? false}
+                                        onOpenFullScreen={() => setShowFullScreenNav(true)}
                   />
                   <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold mb-2">
                     Available System Actions:
@@ -2108,6 +2111,17 @@ onSelectTask={(task) => {
                           ℹ️ Trip will complete at ARRIVED_AT_GATE (Client handles installation)
                         </div>
                       )}
+                            {/* Full-screen driver navigation overlay */}
+      <FullScreenNav
+        isOpen={showFullScreenNav}
+        onClose={() => setShowFullScreenNav(false)}
+        driverLat={selectedTask?.driver_current_lat ?? null}
+        driverLng={selectedTask?.driver_current_lng ?? null}
+        siteLat={selectedTask?.site_latitude ?? null}
+        siteLng={selectedTask?.site_longitude ?? null}
+        siteName={selectedTask?.site_name || "Site"}
+        vehiclePlate={manifest.vehicle.plateNumber}
+      />
                     </div>
                   )}
                 </>

@@ -16,12 +16,13 @@ import {
 // ============================================================
 
 type Props = {
-  driverLat: number | null;
-  driverLng: number | null;
-  siteLat: number | null;
-  siteLng: number | null;
+  driverLat: number | null | undefined;
+  driverLng: number | null | undefined;
+  siteLat: number | null | undefined;
+  siteLng: number | null | undefined;
   siteName: string;
-  isActive: boolean;   // true only when the trip is dispatched
+  isActive: boolean;
+  onOpenFullScreen?: () => void;
 };
 
 export default function NavigationPanel({
@@ -31,6 +32,7 @@ export default function NavigationPanel({
   siteLng,
   siteName,
   isActive,
+  onOpenFullScreen,
 }: Props) {
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [traffic, setTraffic] = useState<TrafficSegment[]>([]);
@@ -248,6 +250,14 @@ export default function NavigationPanel({
             </div>
           </div>
         </div>
+
+        {/* Full-screen navigation launcher */}
+        <button
+          onClick={() => onOpenFullScreen && onOpenFullScreen()}
+          className="mt-3 w-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black py-3 rounded-lg uppercase tracking-widest text-sm transition flex items-center justify-center gap-2"
+        >
+          🗺️ OPEN NAVIGATION
+        </button>
       </div>
     </div>
   );

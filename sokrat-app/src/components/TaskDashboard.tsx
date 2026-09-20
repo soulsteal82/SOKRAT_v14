@@ -5,6 +5,7 @@ import { supabase } from "../app/lib/supabase";
 import { reverseGeocode } from "../app/lib/geocode";
 import { fetchRoute } from "../app/lib/routing";
 import { simulateDriverAlongRoute } from "../app/lib/simulate";
+import NavigationPanel from "./NavigationPanel";
 import React from "react";
 import dynamic from "next/dynamic";
 
@@ -78,6 +79,7 @@ type UserTask = SelectedTaskData & {
   due_at: string;
   current_stage?: number | null;
   asset_count?: number;
+  current_state?: string;
 };
 
 type Props = {
@@ -295,16 +297,41 @@ export default function TaskDashboard({
         "manifest_group_id, factories, order_details, current_stage, driver_name, driver_phone, driver_rating, driver_total_trips, vehicle_plate, vehicle_trailer_type, vehicle_ownership, inspector_name, inspector_phone, inspector_email, driver_current_lat, driver_current_lng, driver_last_update, driver_status, site_name, site_latitude, site_longitude, site_gps_source, site_gps_updated_at, selected_scope, selected_defect, dispatcher_panels_count, dispatcher_notes, epd1_url, mix1_url, epd2_url, mix2_url, delivery_note_url, delivery_note_file_name"
       )
       .in("manifest_group_id", manifestIds);
-          // Count actual assets per manifest (source of truth for panel count)
+    // Count actual assets per manifest + track current state
     const { data: assetCounts } = await supabase
       .from("assets")
-      .select("manifest_group_id")
+      .select("manifest_group_id, state")
       .in("manifest_group_id", manifestIds);
 
     const assetCountByManifest: Record<string, number> = {};
+    const currentStateByManifest: Record<string, string> = {};
+
+    // Rank order — lower = less advanced. We pick the *least advanced*
+    // state so that if ANY panel is still at the factory, the whole trip
+    // reads as "at factory".
+    const stateRank = (s: string): number => {
+      if (!s) return 0;
+      if (s.startsWith("REJECTED")) return -1;
+      if (s === "INITIALIZED") return 0;
+      if (s === "LOADING_INITIATED") return 1;
+      if (s === "LOADING_COMPLETED") return 2;
+      if (s.startsWith("DISPATCHED")) return 3;
+      if (s === "ARRIVED_AT_GATE") return 4;
+      if (s.startsWith("RECEIVED_ON_SITE")) return 5;
+      if (s === "GATE_IN_OFFLOADING") return 6;
+      if (s === "OFFLOADING_COMPLETED") return 7;
+      if (s === "INSTALLATION_INITIATED") return 8;
+      if (s === "INSTALLATION_COMPLETED") return 9;
+      return 0;
+    };
+
     (assetCounts || []).forEach((row: any) => {
       const id = row.manifest_group_id;
       assetCountByManifest[id] = (assetCountByManifest[id] || 0) + 1;
+      const prev = currentStateByManifest[id];
+      if (prev === undefined || stateRank(row.state) < stateRank(prev)) {
+        currentStateByManifest[id] = row.state;
+      }
     });
 
     const driverNames = [
@@ -324,13 +351,14 @@ export default function TaskDashboard({
       const manifest = manifestData?.find(
         (m) => m.manifest_group_id === task.manifest_group_id
       );
-      return {
-        ...task,
-        factories: manifest?.factories || [],
-        order_details: manifest?.order_details,
-        current_stage: manifest?.current_stage,
-                  asset_count: assetCountByManifest[task.manifest_group_id] || 0,
-        driver_name: manifest?.driver_name,
+              return {
+          ...task,
+          factories: manifest?.factories || [],
+          order_details: manifest?.order_details,
+          current_stage: manifest?.current_stage,
+          asset_count: assetCountByManifest[task.manifest_group_id] || 0,
+          current_state: currentStateByManifest[task.manifest_group_id] || "INITIALIZED",
+          driver_name: manifest?.driver_name,
         driver_phone: manifest?.driver_phone,
         driver_rating:
           getDriverRating(manifest?.driver_name)?.rating ??
@@ -366,7 +394,20 @@ export default function TaskDashboard({
       };
     });
 
-    setTasks(enrichedTasks);
+     // Sort by priority: HIGH → MEDIUM → LOW, then by manifest ID
+    const priorityRank: Record<string, number> = {
+      HIGH: 0,
+      MEDIUM: 1,
+      LOW: 2,
+    };
+    const sorted = [...enrichedTasks].sort((a, b) => {
+      const ra = priorityRank[a.priority] ?? 99;
+      const rb = priorityRank[b.priority] ?? 99;
+      if (ra !== rb) return ra - rb;
+      return a.manifest_group_id.localeCompare(b.manifest_group_id);
+    });
+
+    setTasks(sorted);
     setLoading(false);
   };
 
@@ -720,12 +761,38 @@ export default function TaskDashboard({
                           originLabel={
                             task.factories?.[0]?.factory_name || "Factory"
                           }
-                          driverStatus={task.driver_status}
+                          currentState={
+                            simRunning && isSimForThisTask
+                              ? "DISPATCHED_NO_DEFECTS"
+                              : task.current_state
+                          }
                           siteLat={task.site_latitude}
                           siteLng={task.site_longitude}
                           siteName={task.site_name || "Site"}
                           height="160px"
                         />
+
+                        {/* ETA card — shows for all nodes once the trip is dispatched */}
+                        {task.current_state?.startsWith("DISPATCHED") &&
+                          task.site_latitude &&
+                          task.site_longitude && (
+                            <NavigationPanel
+                              driverLat={
+                                isSimForThisTask
+                                  ? simPos.lat
+                                  : task.driver_current_lat ?? null
+                              }
+                              driverLng={
+                                isSimForThisTask
+                                  ? simPos.lng
+                                  : task.driver_current_lng ?? null
+                              }
+                              siteLat={task.site_latitude}
+                              siteLng={task.site_longitude}
+                              siteName={task.site_name || "Site"}
+                              isActive={true}
+                            />
+                          )}
                       </div>
                     </div>
                   )}

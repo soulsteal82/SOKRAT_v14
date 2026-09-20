@@ -35,6 +35,7 @@ type Props = {
   originLng?: number | null | undefined;
   originLabel?: string;
   driverStatus?: string | null;
+  currentState?: string | null;
   siteLat: number;
   siteLng: number;
   siteName: string;
@@ -49,6 +50,7 @@ export default function MiniMap({
   originLng,
   originLabel = "Origin",
   driverStatus,
+  currentState,
   siteLat,
   siteLng,
   siteName,
@@ -128,6 +130,26 @@ export default function MiniMap({
   fullRoute.push([siteLat, siteLng]);
 
   const getStatusLabel = () => {
+    // Derive from the actual custody state (source of truth).
+    // Fall back to driver_status only if no state was passed.
+    const s = currentState || "";
+
+    if (s.includes("REJECTED"))
+      return { text: "⛔ Rejected", color: "bg-red-950/60 text-red-400" };
+    if (s === "INITIALIZED" || s.startsWith("LOADING"))
+      return { text: "🏭 At Factory", color: "bg-orange-950/50 text-orange-400" };
+    if (s.startsWith("DISPATCHED"))
+      return { text: "🚚 In Transit", color: "bg-amber-950/50 text-amber-400" };
+    if (s === "ARRIVED_AT_GATE")
+      return { text: "📍 At Gate", color: "bg-blue-950/50 text-blue-400" };
+    if (s.startsWith("RECEIVED_ON_SITE") || s.includes("OFFLOADING"))
+      return { text: "🏗️ On Site", color: "bg-cyan-950/50 text-cyan-400" };
+    if (s.startsWith("INSTALLATION"))
+      return { text: "🔧 Installing", color: "bg-purple-950/50 text-purple-400" };
+    if (s === "INSTALLATION_COMPLETED")
+      return { text: "✅ Complete", color: "bg-green-950/50 text-green-400" };
+
+    // Fallback to driver_status
     if (driverStatus === "AT_FACTORY")
       return { text: "🏭 At Factory", color: "bg-blue-950/50 text-blue-400" };
     if (driverStatus === "IN_TRANSIT")
