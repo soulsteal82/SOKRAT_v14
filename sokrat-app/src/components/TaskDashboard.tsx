@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabase } from "../app/lib/supabase";
 import { reverseGeocode } from "../app/lib/geocode";
 import { fetchRoute } from "../app/lib/routing";
@@ -414,6 +415,50 @@ export default function TaskDashboard({
   useEffect(() => {
     loadTasks();
   }, [userName, userRole, refreshKey]);
+
+  // ============================================================
+  // Realtime: refresh the task list whenever a manifest changes.
+  // This makes driver GPS updates, status changes, and inspector
+  // verifications appear live on every open screen.
+  // ============================================================
+  const rtChannelRef = useRef<RealtimeChannel | null>(null);
+  const rtDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    const scheduleReload = () => {
+      if (rtDebounceRef.current) clearTimeout(rtDebounceRef.current);
+      rtDebounceRef.current = setTimeout(() => {
+        console.log("[TaskDashboard] Realtime change → reloading tasks");
+        loadTasks();
+      }, 500);
+    };
+
+    const channel = supabase
+      .channel(`task-dashboard-${userName}-${userRole}`)
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "manifests" },
+        scheduleReload
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "assets" },
+        scheduleReload
+      )
+      .subscribe((status) => {
+        console.log("[TaskDashboard] Realtime:", status);
+      });
+
+    rtChannelRef.current = channel;
+
+    return () => {
+      if (rtDebounceRef.current) clearTimeout(rtDebounceRef.current);
+      if (rtChannelRef.current) {
+        supabase.removeChannel(rtChannelRef.current);
+        rtChannelRef.current = null;
+      }
+    };
+  }, [userName, userRole]);
 
   if (loading) {
     return (
