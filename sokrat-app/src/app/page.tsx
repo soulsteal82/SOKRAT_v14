@@ -1886,6 +1886,7 @@ onSelectTask={(task) => {
                 siteName={selectedTask.site_name || "Site"}
                 isActive={true}
                 onOpenFullScreen={() => setShowFullScreenNav(true)}
+                                hideLauncher={true}
               />
             )}
 

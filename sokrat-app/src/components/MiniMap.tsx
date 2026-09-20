@@ -231,9 +231,9 @@ export default function MiniMap({
           zoomControl={true}
         >
           <TileLayer
-            attribution="&copy; OpenStreetMap contributors"
-            url="https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png"
-            subdomains={["a", "b", "c"]}
+            attribution="&copy; OpenStreetMap contributors &copy; CARTO"
+            url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+            subdomains={["a", "b", "c", "d"]}
           />
 
           {/* Real OSRM road route, colored by traffic segments */}

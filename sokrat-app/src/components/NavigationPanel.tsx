@@ -24,6 +24,7 @@ type Props = {
   isActive: boolean;
   onOpenFullScreen?: () => void;
   compact?: boolean;
+    hideLauncher?: boolean;
 };
 
 export default function NavigationPanel({
@@ -35,6 +36,7 @@ export default function NavigationPanel({
   isActive,
   onOpenFullScreen,
   compact = false,
+    hideLauncher = false,
 }: Props) {
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [traffic, setTraffic] = useState<TrafficSegment[]>([]);
@@ -257,8 +259,9 @@ export default function NavigationPanel({
           </div>
         </div>
 
-        {/* Full-screen navigation launcher — hidden in compact mode */}
-        {!compact && onOpenFullScreen && (
+        {/* Full-screen navigation launcher — hidden in compact mode or when
+            the parent renders its own launcher */}
+        {!compact && !hideLauncher && onOpenFullScreen && (
           <button
             onClick={() => onOpenFullScreen()}
             className="mt-3 w-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black py-3 rounded-lg uppercase tracking-widest text-sm transition flex items-center justify-center gap-2"
