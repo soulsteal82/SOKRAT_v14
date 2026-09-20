@@ -139,6 +139,11 @@ export default function MiniMap({
     }
 
     let cancelled = false;
+
+    // Clear old route immediately so stale routes don't linger
+    setOsrmRoute(null);
+    setOsrmTraffic([]);
+
     fetchRoute(origin, [siteLat, siteLng]).then((r) => {
       if (cancelled) return;
       setOsrmRoute(r);
@@ -249,41 +254,50 @@ export default function MiniMap({
             url={`https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png?api_key=${process.env.NEXT_PUBLIC_STADIA_API_KEY || ""}`}
           />
 
-          {/* Real OSRM road route, colored by traffic segments */}
-          {showTraffic &&
-            osrmRoute &&
-            osrmTraffic.length > 0 &&
-            osrmTraffic.map((seg, i) => (
+           {/* Route rendering */}
+          {osrmRoute && osrmRoute.coordinates.length > 1 ? (
+            <>
+              {/* White outline under the traffic color for contrast */}
               <Polyline
-                key={`seg-${i}`}
-                positions={osrmRoute.coordinates.slice(
-                  seg.startIndex,
-                  seg.endIndex + 1
-                )}
-                pathOptions={{
-                  color: seg.color,
-                  weight: 5,
-                  opacity: 0.95,
-                }}
+                positions={osrmRoute.coordinates}
+                pathOptions={{ color: "#ffffff", weight: 8, opacity: 0.35 }}
               />
-            ))}
 
-          {/* Fallback straight-line if OSRM hasn't responded yet */}
-          {showTraffic &&
-            (!osrmRoute || osrmTraffic.length === 0) &&
+              {/* Traffic-colored segments on top */}
+              {showTraffic && osrmTraffic.length > 0
+                ? osrmTraffic.map((seg, i) => (
+                    <Polyline
+                      key={`seg-${i}`}
+                      positions={osrmRoute.coordinates.slice(
+                        seg.startIndex,
+                        seg.endIndex + 1
+                      )}
+                      pathOptions={{
+                        color: seg.color,
+                        weight: 5,
+                        opacity: 1,
+                      }}
+                    />
+                  ))
+                : (
+                  <Polyline
+                    positions={osrmRoute.coordinates}
+                    pathOptions={{ color: "#06b6d4", weight: 5, opacity: 1 }}
+                  />
+                )}
+            </>
+          ) : (
             fullRoute.length > 1 && (
               <Polyline
                 positions={fullRoute}
-                pathOptions={{ color: "#06b6d4", weight: 4, opacity: 0.7, dashArray: "4 6" }}
+                pathOptions={{
+                  color: "#06b6d4",
+                  weight: 4,
+                  opacity: 0.7,
+                  dashArray: "4 6",
+                }}
               />
-            )}
-
-          {/* Non-traffic mode */}
-          {!showTraffic && fullRoute.length > 1 && (
-            <Polyline
-              positions={fullRoute}
-              pathOptions={{ color: "#06b6d4", weight: 4, opacity: 0.9 }}
-            />
+            )
           )}
 
           {/* Live driver marker */}
@@ -325,7 +339,7 @@ export default function MiniMap({
           )}
         </MapContainer>
 
-        {showTraffic && (
+        {showTraffic && osrmRoute && osrmTraffic.length > 0 && (
           <div className="absolute bottom-1 left-1 bg-slate-900/90 border border-slate-700 rounded px-1.5 py-0.5 text-[7px] text-slate-300 z-[400]">
             <span className="inline-block w-2 h-0.5 bg-red-500 align-middle mr-1"></span>Heavy
             <span className="inline-block w-2 h-0.5 bg-orange-500 align-middle ml-2 mr-1"></span>Med
