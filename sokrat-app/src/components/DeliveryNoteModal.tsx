@@ -65,23 +65,23 @@ export default function DeliveryNoteModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-sm">
-      <div className="bg-white text-slate-900 w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-lg shadow-2xl">
-        {/* Header bar with close + print */}
-        <div className="sticky top-0 bg-slate-100 border-b border-slate-300 px-4 py-2 flex items-center justify-between z-10">
-          <span className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-            Delivery Note Preview
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-2 sm:p-4 bg-slate-950/90 backdrop-blur-sm touch-manipulation">
+      <div className="bg-white text-slate-900 w-full max-w-2xl max-h-[92vh] sm:max-h-[90vh] overflow-y-auto rounded-lg shadow-2xl">
+        {/* Header bar with close + print — sticky, always visible on mobile */}
+        <div className="sticky top-0 bg-slate-100 border-b border-slate-300 px-3 sm:px-4 py-3 flex items-center justify-between z-20">
+          <span className="text-[10px] sm:text-xs font-bold text-slate-600 uppercase tracking-wider">
+            Delivery Note
           </span>
           <div className="flex gap-2">
             <button
               onClick={() => window.print()}
-              className="text-xs bg-cyan-600 hover:bg-cyan-700 text-white px-3 py-1 rounded font-bold uppercase transition"
+              className="text-[11px] sm:text-xs bg-cyan-600 hover:bg-cyan-700 active:bg-cyan-800 text-white px-3 py-2 rounded font-bold uppercase transition touch-manipulation"
             >
               🖨️ Print
             </button>
             <button
               onClick={onClose}
-              className="text-xs bg-slate-300 hover:bg-slate-400 text-slate-800 px-3 py-1 rounded font-bold uppercase transition"
+              className="text-[11px] sm:text-xs bg-slate-700 hover:bg-slate-800 active:bg-slate-900 text-white px-3 py-2 rounded font-bold uppercase transition touch-manipulation"
             >
               ✕ Close
             </button>
@@ -310,6 +310,22 @@ export default function DeliveryNoteModal({
           {/* Footer */}
           <div className="text-center text-xs text-slate-500 pt-4 border-t border-slate-300">
             This is a computer-generated document from S.O.K.R.A.T. System
+          </div>
+
+          {/* Bottom actions — easy close on mobile */}
+          <div className="sticky bottom-0 bg-white border-t border-slate-300 pt-3 pb-2 flex gap-2">
+            <button
+              onClick={() => window.print()}
+              className="flex-1 text-xs bg-cyan-600 hover:bg-cyan-700 text-white px-4 py-2.5 rounded font-bold uppercase tracking-wider transition touch-manipulation"
+            >
+              🖨️ Print
+            </button>
+            <button
+              onClick={onClose}
+              className="flex-1 text-xs bg-slate-700 hover:bg-slate-800 text-white px-4 py-2.5 rounded font-bold uppercase tracking-wider transition touch-manipulation"
+            >
+              ✕ Close
+            </button>
           </div>
         </div>
       </div>

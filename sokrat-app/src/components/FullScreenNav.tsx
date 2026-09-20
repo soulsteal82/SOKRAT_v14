@@ -137,10 +137,10 @@ export default function FullScreenNav({
   if (siteLat != null && siteLng != null) fullRoute.push([siteLat, siteLng]);
 
   return (
-    <div className="fixed inset-0 z-[200] bg-slate-950 flex flex-col">
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 z-[201]">
-        <div className="flex items-center gap-3">
+    <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col isolate">
+          {/* Top bar */}
+      <div className="flex items-center justify-between px-4 py-3 bg-slate-900 border-b border-slate-800 z-[10000] relative">
+              <div className="flex items-center gap-3">
           <span className="text-2xl">🚚</span>
           <div>
             <div className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
@@ -160,15 +160,15 @@ export default function FullScreenNav({
       {!delayOpen && (
         <button
           onClick={() => setDelayOpen(true)}
-          className="absolute top-20 right-3 z-[500] bg-amber-600 hover:bg-amber-500 text-slate-950 text-xs font-black py-2 px-3 rounded-full shadow-2xl border-2 border-amber-300 flex items-center gap-1.5"
-        >
+          className="absolute top-20 right-3 z-[10001] bg-amber-600 hover:bg-amber-500 text-slate-950 text-xs font-black py-2 px-3 rounded-full shadow-2xl border-2 border-amber-300 flex items-center gap-1.5"
+                  >
           ⚠️ Log Delay
         </button>
       )}
 
       {delayOpen && (
-        <div className="absolute inset-0 z-[600] bg-slate-950/95 backdrop-blur-sm flex flex-col items-center justify-center p-6">
-          <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl p-5 space-y-4">
+        <div className="absolute inset-0 z-[10002] bg-slate-950/95 backdrop-blur-sm flex flex-col items-center justify-center p-6">
+                  <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl p-5 space-y-4">
             <div className="text-center">
               <div className="text-3xl mb-1">⚠️</div>
               <div className="text-sm font-black text-amber-400 uppercase tracking-widest">
@@ -318,8 +318,8 @@ export default function FullScreenNav({
 
         {/* Floating ETA badge */}
         {eta && (
-          <div className="absolute top-3 left-14 right-3 bg-slate-900/95 backdrop-blur border border-cyan-800/50 rounded-xl p-3 shadow-2xl z-[400]">
-            <div className="flex items-center justify-between">
+          <div className="absolute top-3 left-14 right-14 bg-slate-900/95 backdrop-blur border border-cyan-800/50 rounded-xl p-3 shadow-2xl z-[10001]">
+                      <div className="flex items-center justify-between">
               <div>
                 <div className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">
                   ETA
@@ -359,8 +359,8 @@ export default function FullScreenNav({
 
         {/* Next-step bottom banner */}
         {route && route.steps.length > 0 && (
-          <div className="absolute bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur border-t border-cyan-800/50 px-4 py-3 z-[400]">
-            <div className="flex items-center gap-3">
+          <div className="absolute bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur border-t border-cyan-800/50 px-4 py-3 z-[10001]">
+                      <div className="flex items-center gap-3">
               <span className="text-3xl text-cyan-300">
                 {route.steps[0].maneuver === "arrive"
                   ? "🏁"

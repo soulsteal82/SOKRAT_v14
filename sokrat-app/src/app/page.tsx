@@ -1519,11 +1519,14 @@ onClick={() => {
           </p>
         </div>
 
-        {loadingDuration !== null && (
-          <div className="bg-slate-950 p-2 border border-slate-700 rounded-lg text-xs text-slate-400">
-            ⏱️ Loading Duration: <span className="text-cyan-400 font-bold">{loadingDuration} minutes</span>
-          </div>
-        )}
+        <div className="bg-slate-950 p-2 border border-slate-700 rounded-lg text-xs text-slate-400">
+          ⏱️ Loading Duration:{" "}
+          {loadingDuration !== null ? (
+            <span className="text-cyan-400 font-bold">{loadingDuration} minutes</span>
+          ) : (
+            <span className="text-slate-500 italic font-bold">N/A</span>
+          )}
+        </div>
 
         {currentAsset?.state.startsWith("REJECTED_") && (
           <div className="p-2.5 bg-red-950/20 border border-red-900/40 rounded-lg flex flex-col gap-2 border-l-4 border-l-red-500">

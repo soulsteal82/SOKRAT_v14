@@ -430,7 +430,26 @@ export default function TaskDashboard({
       </div>
     );
   }
-
+// ---- Status pill derived from current_state ----
+function getStatusPill(state: string | undefined) {
+  const s = state || "";
+  if (s.includes("REJECTED"))
+    return { label: "REJECTED", cls: "bg-red-950/60 text-red-400 border-red-900" };
+  if (s === "INSTALLATION_COMPLETED")
+    return { label: "✅ COMPLETED", cls: "bg-green-950/60 text-green-400 border-green-900" };
+  if (
+    s.startsWith("DISPATCHED") ||
+    s === "ARRIVED_AT_GATE" ||
+    s.startsWith("RECEIVED_ON_SITE") ||
+    s === "GATE_IN_OFFLOADING" ||
+    s === "OFFLOADING_COMPLETED" ||
+    s === "INSTALLATION_INITIATED"
+  )
+    return { label: "🚚 IN PROGRESS", cls: "bg-blue-950/60 text-blue-300 border-blue-900" };
+  if (s === "INITIALIZED" || s.startsWith("LOADING"))
+    return { label: "🟡 PENDING", cls: "bg-amber-950/60 text-amber-400 border-amber-900" };
+  return { label: "🟡 PENDING", cls: "bg-amber-950/60 text-amber-400 border-amber-900" };
+}
   const priorityColor = (p: string) => {
     if (p === "HIGH") return "bg-red-950/50 text-red-400";
     if (p === "MEDIUM") return "bg-amber-950/50 text-amber-400";
@@ -521,17 +540,24 @@ export default function TaskDashboard({
               onClick={() => handleTaskClick(task)}
             >
               <div className="p-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-mono text-slate-200 text-[10px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-mono text-slate-200 text-[10px] truncate">
                     {task.manifest_group_id}
                   </span>
-                  <span
-                    className={`text-[8px] px-2 py-0.5 rounded font-bold ${priorityColor(
-                      task.priority
-                    )}`}
-                  >
-                    {task.priority}
-                  </span>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span
+                      className={`text-[8px] px-2 py-0.5 rounded font-bold border ${getStatusPill(task.current_state).cls}`}
+                    >
+                      {getStatusPill(task.current_state).label}
+                    </span>
+                    <span
+                      className={`text-[8px] px-2 py-0.5 rounded font-bold ${priorityColor(
+                        task.priority
+                      )}`}
+                    >
+                      {task.priority}
+                    </span>
+                  </div>
                 </div>
 
                 {isMultiFactory && userRole === "DISPATCHER" && (
@@ -744,7 +770,7 @@ export default function TaskDashboard({
                         </div>
                       )}
 
-                      <div onClick={(e) => e.stopPropagation()}>
+<div onClick={(e) => e.stopPropagation()} className="aspect-square w-full">
                         <MiniMap
                           driverLat={
                             isSimForThisTask
@@ -769,7 +795,7 @@ export default function TaskDashboard({
                           siteLat={task.site_latitude}
                           siteLng={task.site_longitude}
                           siteName={task.site_name || "Site"}
-                          height="160px"
+                          height="100%"
                         />
 
                         {/* ETA card — shows for all nodes once the trip is dispatched */}
