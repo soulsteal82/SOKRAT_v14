@@ -770,7 +770,7 @@ function getStatusPill(state: string | undefined) {
                         </div>
                       )}
 
-<div onClick={(e) => e.stopPropagation()} className="aspect-square w-full">
+                      <div onClick={(e) => e.stopPropagation()}>
                         <MiniMap
                           driverLat={
                             isSimForThisTask
