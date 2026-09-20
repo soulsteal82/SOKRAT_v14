@@ -2,6 +2,12 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import {
+  fetchRoute,
+  simulateTraffic,
+  RouteResult,
+  TrafficSegment,
+} from "@/app/lib/routing";
 
 const MapContainer = dynamic(
   () => import("react-leaflet").then((mod) => mod.MapContainer),
@@ -59,6 +65,8 @@ export default function MiniMap({
 }: Props) {
   const [mounted, setMounted] = useState(false);
   const [L, setL] = useState<any>(null);
+    const [osrmRoute, setOsrmRoute] = useState<RouteResult | null>(null);
+  const [osrmTraffic, setOsrmTraffic] = useState<TrafficSegment[]>([]);
   const [icons, setIcons] = useState<{
     driverIcon: any;
     siteIcon: any;
@@ -95,6 +103,38 @@ export default function MiniMap({
     setIcons({ driverIcon, siteIcon });
     setMounted(true);
   }, []);
+    // Fetch real road route whenever the origin or destination changes
+  useEffect(() => {
+    const hasOrigin = driverLat != null && driverLng != null;
+    const hasFallback = originLat != null && originLng != null;
+    const origin: [number, number] | null = hasOrigin
+      ? [driverLat!, driverLng!]
+      : hasFallback
+      ? [originLat!, originLng!]
+      : null;
+
+    if (!origin) {
+      setOsrmRoute(null);
+      setOsrmTraffic([]);
+      return;
+    }
+    if (siteLat == null || siteLng == null) {
+      setOsrmRoute(null);
+      setOsrmTraffic([]);
+      return;
+    }
+
+    let cancelled = false;
+    fetchRoute(origin, [siteLat, siteLng]).then((r) => {
+      if (cancelled) return;
+      setOsrmRoute(r);
+      setOsrmTraffic(simulateTraffic(r));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [driverLat, driverLng, originLat, originLng, siteLat, siteLng]);
 
   if (!mounted || !L) {
     return (
@@ -196,23 +236,36 @@ export default function MiniMap({
             subdomains={["a", "b", "c"]}
           />
 
-          {showTraffic && fullRoute.length > 1 && (
-            <>
+          {/* Real OSRM road route, colored by traffic segments */}
+          {showTraffic &&
+            osrmRoute &&
+            osrmTraffic.length > 0 &&
+            osrmTraffic.map((seg, i) => (
               <Polyline
-                positions={fullRoute}
-                pathOptions={{ color: "#ef4444", weight: 6, opacity: 0.7 }}
+                key={`seg-${i}`}
+                positions={osrmRoute.coordinates.slice(
+                  seg.startIndex,
+                  seg.endIndex + 1
+                )}
+                pathOptions={{
+                  color: seg.color,
+                  weight: 5,
+                  opacity: 0.95,
+                }}
               />
-              <Polyline
-                positions={fullRoute}
-                pathOptions={{ color: "#f97316", weight: 4, opacity: 0.5 }}
-              />
-              <Polyline
-                positions={fullRoute}
-                pathOptions={{ color: "#22c55e", weight: 2, opacity: 0.9 }}
-              />
-            </>
-          )}
+            ))}
 
+          {/* Fallback straight-line if OSRM hasn't responded yet */}
+          {showTraffic &&
+            (!osrmRoute || osrmTraffic.length === 0) &&
+            fullRoute.length > 1 && (
+              <Polyline
+                positions={fullRoute}
+                pathOptions={{ color: "#06b6d4", weight: 4, opacity: 0.7, dashArray: "4 6" }}
+              />
+            )}
+
+          {/* Non-traffic mode */}
           {!showTraffic && fullRoute.length > 1 && (
             <Polyline
               positions={fullRoute}

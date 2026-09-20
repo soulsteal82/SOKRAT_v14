@@ -273,9 +273,9 @@ export default function FullScreenNav({
             dragging={true}
             zoomControl={true}
           >
-            <TileLayer
+                 <TileLayer
               attribution="&copy; OpenStreetMap contributors"
-              url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+              url="https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
               subdomains={["a", "b", "c", "d"]}
             />
 
@@ -319,7 +319,7 @@ export default function FullScreenNav({
 
         {/* Floating ETA badge */}
         {eta && (
-          <div className="absolute top-3 left-3 right-3 bg-slate-900/95 backdrop-blur border border-cyan-800/50 rounded-xl p-3 shadow-2xl z-[400]">
+          <div className="absolute top-3 left-14 right-3 bg-slate-900/95 backdrop-blur border border-cyan-800/50 rounded-xl p-3 shadow-2xl z-[400]">
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-[9px] text-slate-500 uppercase tracking-widest font-bold">

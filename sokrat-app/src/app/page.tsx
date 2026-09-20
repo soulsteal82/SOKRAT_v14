@@ -14,6 +14,7 @@ import RamcoSyncPanel from "@/components/RamcoSyncPanel";
 import SiteGpsButton from "@/components/SiteGpsButton";
 import NavigationPanel from "@/components/NavigationPanel";
 import FullScreenNav from "@/components/FullScreenNav";
+import { startDriverGpsBroadcast, DriverGpsHandle } from "@/app/lib/driverGps";
 import { supabase } from "../app/lib/supabase";
 
 const DeliveryNoteModal = dynamic(
@@ -208,6 +209,9 @@ export default function Home() {
     const [taskRefreshKey, setTaskRefreshKey] = useState(0);
       const custodyLogRef = useRef<HTMLDivElement | null>(null);
         const [showFullScreenNav, setShowFullScreenNav] = useState(false);
+          // Driver live GPS broadcast
+  const gpsHandleRef = useRef<DriverGpsHandle | null>(null);
+  const [gpsBroadcasting, setGpsBroadcasting] = useState(false);
    const [showDeliveryNote, setShowDeliveryNote] = useState(false);
   const [checkedEPD, setCheckedEPD] = useState(false);
   const [checkedMixDesign, setCheckedMixDesign] = useState(false);
@@ -345,6 +349,38 @@ const currentAsset = assets.length > 0
       custodyLogRef.current.scrollTop = custodyLogRef.current.scrollHeight;
     }
   }, [currentAsset?.custodyHistory?.length]);
+    // Driver live GPS broadcast — only when profile is DRIVER and trip is dispatched
+  useEffect(() => {
+    const shouldBroadcast =
+      profile === "DRIVER" &&
+      !!selectedTask &&
+      !!currentAsset?.state?.startsWith("DISPATCHED");
+
+    if (shouldBroadcast) {
+      // Avoid double-start
+      if (gpsHandleRef.current) return;
+
+      console.log("[SOKRAT] Starting driver GPS broadcast for", selectedTask?.manifest_group_id);
+      const handle = startDriverGpsBroadcast(
+        selectedTask!.manifest_group_id,
+        () => setGpsBroadcasting(true)
+      );
+      gpsHandleRef.current = handle;
+      setGpsBroadcasting(true);
+    } else {
+      if (gpsHandleRef.current) {
+        console.log("[SOKRAT] Stopping driver GPS broadcast");
+        gpsHandleRef.current.stop();
+        gpsHandleRef.current = null;
+      }
+      setGpsBroadcasting(false);
+    }
+
+    return () => {
+      // Cleanup on unmount only if we're no longer broadcasting
+      // (the effect re-runs on state change; we don't want to kill mid-trip)
+    };
+  }, [profile, selectedTask?.manifest_group_id, currentAsset?.state]);
   // ============================================
   // PHASE 2: Load assets (panels) from Supabase for a task
   // ============================================
@@ -1810,7 +1846,107 @@ onSelectTask={(task) => {
 }}
         />
 
+        {/* ═══════════════════════════════════════════════════════════
+            DRIVER-FIRST LAYOUT
+            When the profile is DRIVER and a dispatched task is open,
+            show the primary actions (nav + system) right here, before
+            any diagnostics. This is what the driver actually needs.
+            ═══════════════════════════════════════════════════════════ */}
+        {profile === "DRIVER" && selectedTask && assets.length > 0 && (
+          <div className="space-y-3">
+            {/* Live GPS pill */}
+            {gpsBroadcasting && (
+              <div className="flex items-center justify-center gap-2 bg-green-950/40 border border-green-800/60 text-green-300 text-[10px] font-bold uppercase tracking-widest py-1.5 rounded-lg">
+                <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                Broadcasting Live GPS
+              </div>
+            )}
 
+            {/* Big "Open Navigation" launch card for the driver */}
+            {currentAsset?.state?.startsWith("DISPATCHED") &&
+             selectedTask.site_latitude &&
+             selectedTask.site_longitude && (
+              <button
+                onClick={() => setShowFullScreenNav(true)}
+                className="w-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-black py-5 rounded-xl uppercase tracking-widest text-base transition flex items-center justify-center gap-3 shadow-2xl"
+              >
+                🗺️ OPEN NAVIGATION
+              </button>
+            )}
+
+            {/* System actions (delay, arrived, etc.) — compact strip */}
+            <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 space-y-2">
+              <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold">
+                Available System Actions:
+              </span>
+
+              {!currentAsset?.state.includes("REJECTED") && (
+                <div className="space-y-2">
+                  <div className="bg-slate-950 p-2 border border-slate-800 rounded-lg">
+                    <span className="block text-[8px] text-slate-500 uppercase font-bold mb-1">
+                      Select Active Transit Highway Delay Reason:
+                    </span>
+                    <select
+                      value={selectedDelayReason}
+                      onChange={(e) => setSelectedDelayReason(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 text-xs text-amber-500 p-1 rounded focus:outline-none"
+                    >
+                      <option value="">-- No Delay Detected --</option>
+                      {PRECAST_DELAY_REASONS.map((r) => (
+                        <option key={r} value={r}>{r}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        if (currentAsset?.state.startsWith("DISPATCHED")) {
+                          transitionAllAssets("ARRIVED_AT_GATE");
+                        }
+                      }}
+                      disabled={!currentAsset?.state.startsWith("DISPATCHED")}
+                      className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold p-3 rounded text-xs uppercase disabled:opacity-30 disabled:pointer-events-none transition"
+                    >
+                      {getDriverButtonText()}
+                    </button>
+                    <button
+                      onClick={() => {
+                        const customLogState = selectedDelayReason
+                          ? `TRANSIT_DELAY_(${selectedDelayReason.toUpperCase().replace(/\s+/g, "_")})`
+                          : "TRANSIT_DELAY";
+                        setAssets((prev) => {
+                          const newAssets = prev.map((a) => {
+                            const updated = {
+                              ...a,
+                              transit_delay_minutes: (a.transit_delay_minutes || 0) + 15,
+                              delay_reason: selectedDelayReason,
+                              custodyHistory: [
+                                ...a.custodyHistory,
+                                {
+                                  timestamp: getFormattedTimestamp(),
+                                  state: customLogState,
+                                  custody: "TRANSIT LOGISTICS (Driver)",
+                                },
+                              ],
+                            };
+                            saveAssetState(updated.id, updated);
+                            return updated;
+                          });
+                          return newAssets;
+                        });
+                      }}
+                      disabled={!currentAsset?.state.startsWith("DISPATCHED") || !selectedDelayReason}
+                      className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-4 rounded text-xs uppercase disabled:opacity-30 disabled:pointer-events-none transition"
+                    >
+                      ⚠ Log Delay (+15m)
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
        
         {/* Custody Ledger - Verification Stamp */}
         {selectedTask && assets.length > 0 && (
@@ -2001,143 +2137,6 @@ onSelectTask={(task) => {
 
         {/* Action panels - Conditional based on scope */}
         <div className="border-t border-slate-800/80 pt-1.5">
-          {/* DRIVER NODE - FIXED */}
-          {profile === "DRIVER" && manifest.scope !== "FACTORY_ONLY" && selectedTask && (
-            <div className="space-y-3 animate-fade-in">
-              {!isTripComplete() ? (
-              
-              
-                <>                  {/* Talabat-style navigation card — shows when driver is on the road */}
-                  <NavigationPanel
-                    driverLat={
-                      currentAsset?.state.startsWith("DISPATCHED")
-                        ? (manifest.driver && selectedTask?.driver_current_lat != null
-                            ? selectedTask.driver_current_lat
-                            : 24.4800)
-                        : null
-                    }
-                    driverLng={
-                      currentAsset?.state.startsWith("DISPATCHED")
-                        ? (selectedTask?.driver_current_lng != null
-                            ? selectedTask.driver_current_lng
-                            : 54.4300)
-                        : null
-                    }
-                    siteLat={selectedTask?.site_latitude ?? null}
-                    siteLng={selectedTask?.site_longitude ?? null}
-                    siteName={selectedTask?.site_name || "Site"}
-                    isActive={currentAsset?.state.startsWith("DISPATCHED") ?? false}
-                                        onOpenFullScreen={() => setShowFullScreenNav(true)}
-                  />
-                  <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold mb-2">
-                    Available System Actions:
-                  </span>
-                  {!currentAsset?.state.includes("REJECTED") && (
-                    <div className="space-y-2">
-                      <div className="bg-slate-950 p-2 border border-slate-800 rounded-lg">
-                        <span className="block text-[8px] text-slate-500 uppercase font-bold mb-1">
-                          Select Active Transit Highway Delay Reason:
-                        </span>
-                        <select
-                          value={selectedDelayReason}
-                          onChange={(e) => setSelectedDelayReason(e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 text-xs text-amber-500 p-1 rounded focus:outline-none"
-                        >
-                          <option value="">-- No Delay Detected --</option>
-                          {PRECAST_DELAY_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
-                        </select>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => {
-                            if (currentAsset?.state.startsWith("DISPATCHED")) {
-                              transitionAllAssets("ARRIVED_AT_GATE");
-                            }
-                          }}
-                          disabled={!currentAsset?.state.startsWith("DISPATCHED")}
-                          className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold p-2.5 rounded text-xs uppercase disabled:opacity-30 disabled:pointer-events-none transition"
-                        >
-                          {getDriverButtonText()}
-                        </button>
-                        <button
-                                                    onClick={() => {
-                            const customLogState = selectedDelayReason
-                              ? `TRANSIT_DELAY_(${selectedDelayReason.toUpperCase().replace(/\s+/g, '_')})`
-                              : "TRANSIT_DELAY";
-                            setAssets(prev => {
-                              const newAssets = prev.map(a => {
-                                const updated = {
-                                  ...a,
-                                  transit_delay_minutes: (a.transit_delay_minutes || 0) + 15,
-                                  delay_reason: selectedDelayReason,
-                                  custodyHistory: [
-                                    ...a.custodyHistory,
-                                    { timestamp: getFormattedTimestamp(), state: customLogState, custody: "TRANSIT LOGISTICS (Driver)" }
-                                  ]
-                                };
-                                saveAssetState(updated.id, updated);
-                                return updated;
-                              });
-                              return newAssets;
-                            });
-                          }}
-                          disabled={!currentAsset?.state.startsWith("DISPATCHED") || !selectedDelayReason}
-                          className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-3 rounded text-xs uppercase disabled:opacity-30 disabled:pointer-events-none transition"
-                        >
-                          ⚠ Log Delay (+15m)
-                        </button>
-                      </div>
-                      {manifest.scope === "DELIVERY_ONLY" && (
-                        <div className="text-[8px] text-blue-400 text-center font-mono border border-blue-900/30 bg-blue-950/10 p-1 rounded">
-                          ℹ️ Trip will complete at ARRIVED_AT_GATE (Client handles installation)
-                        </div>
-                      )}
-                            {/* Full-screen driver navigation overlay */}
-      <FullScreenNav
-        isOpen={showFullScreenNav}
-        onClose={() => setShowFullScreenNav(false)}
-        driverLat={selectedTask?.driver_current_lat ?? null}
-        driverLng={selectedTask?.driver_current_lng ?? null}
-        siteLat={selectedTask?.site_latitude ?? null}
-        siteLng={selectedTask?.site_longitude ?? null}
-        siteName={selectedTask?.site_name || "Site"}
-        vehiclePlate={manifest.vehicle.plateNumber}
-      />
-            <FullScreenNav
-        isOpen={showFullScreenNav}
-        onClose={() => setShowFullScreenNav(false)}
-        driverLat={selectedTask?.driver_current_lat ?? null}
-        driverLng={selectedTask?.driver_current_lng ?? null}
-        siteLat={selectedTask?.site_latitude ?? null}
-        siteLng={selectedTask?.site_longitude ?? null}
-        siteName={selectedTask?.site_name || "Site"}
-        vehiclePlate={manifest.vehicle.plateNumber}
-        manifestGroupId={manifest.manifest_group_id}
-        onDelayLogged={(reason, minutes) => {
-          // Refresh local assets so the delay is reflected immediately
-          loadAssetsForTask(manifest.manifest_group_id);
-        }}
-      />
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="p-3 bg-gradient-to-r from-cyan-950 to-slate-900 border border-cyan-500/30 rounded-lg text-center space-y-2">
-                  <span className="text-xs text-cyan-400 font-bold block uppercase tracking-wider">
-                    🚚 Your delivery task is complete!
-                  </span>
-<button
-  onClick={() => {
-    setSelectedTask(null);
-  }}
-  className="w-full bg-cyan-500 hover:bg-cyan-400 text-slate-950 py-1.5 rounded text-xs font-bold uppercase transition"
->
-  ✅ Return to My Tasks
-</button>
-                </div>
-              )}
-            </div>
-          )}
 
                     {/* INSPECTOR NODE */}
           {profile === "INSPECTOR" && manifest.scope === "FULL" && selectedTask && (
