@@ -203,6 +203,7 @@ const fileToBase64 = (file: File): Promise<string> => {
 export default function Home() {
   const [profile, setProfile] = useState<"DISPATCHER" | "DRIVER" | "INSPECTOR">("DISPATCHER");
   const [selectedTask, setSelectedTask] = useState<SelectedTaskData | null>(null);
+    const [taskRefreshKey, setTaskRefreshKey] = useState(0);
   const [showDeliveryNote, setShowDeliveryNote] = useState(false);
   const [checkedEPD, setCheckedEPD] = useState(false);
   const [checkedMixDesign, setCheckedMixDesign] = useState(false);
@@ -1541,6 +1542,7 @@ const saveTaskState = async (
 onClick={() => {
   setManifest(prev => ({ ...prev, scope: "FULL" }));
   saveTaskState({ selected_scope: "FULL" }, manifest.manifest_group_id);
+  setTaskRefreshKey(prev => prev + 1);
 }}              className={`px-2 py-1.5 rounded text-[10px] font-bold uppercase transition ${
                 manifest.scope === "FULL"
                   ? "bg-green-600 text-white"
@@ -1553,6 +1555,7 @@ onClick={() => {
 onClick={() => {
   setManifest(prev => ({ ...prev, scope: "DELIVERY_ONLY" }));
  saveTaskState({ selected_scope: "DELIVERY_ONLY" }, manifest.manifest_group_id);
+ setTaskRefreshKey(prev => prev + 1);
 }}              className={`px-2 py-1.5 rounded text-[10px] font-bold uppercase transition ${
                 manifest.scope === "DELIVERY_ONLY"
                   ? "bg-blue-600 text-white"
@@ -1565,6 +1568,7 @@ onClick={() => {
 onClick={() => {
   setManifest(prev => ({ ...prev, scope: "FACTORY_ONLY" }));
  saveTaskState({ selected_scope: "FACTORY_ONLY" }, manifest.manifest_group_id);
+ setTaskRefreshKey(prev => prev + 1);
 }}              className={`px-2 py-1.5 rounded text-[10px] font-bold uppercase transition ${
                 manifest.scope === "FACTORY_ONLY"
                   ? "bg-amber-600 text-white"
@@ -1681,8 +1685,9 @@ onClick={() => {
                   checked={selectedDispatcherDefect === defect}
 onChange={(e) => {
   setSelectedDispatcherDefect(e.target.value);
- saveTaskState({ selected_defect: e.target.value }, manifest.manifest_group_id);
-}}                  className="accent-amber-500"
+  saveTaskState({ selected_defect: e.target.value }, manifest.manifest_group_id);
+  setTaskRefreshKey(prev => prev + 1);
+}}                 className="accent-amber-500"
                 />
                 <span>{defect}</span>
               </label>
@@ -1851,6 +1856,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
           }
           userRole={profile}
           selectedTaskId={selectedTask?.task_id || null}
+                    refreshKey={taskRefreshKey}
 onSelectTask={(task) => {
   if (!task) {
     // Task was collapsed — clear everything

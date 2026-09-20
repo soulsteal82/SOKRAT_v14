@@ -84,6 +84,7 @@ type Props = {
   userRole: string;
   selectedTaskId?: string | null;
   onSelectTask?: (task: SelectedTaskData | null) => void;
+  refreshKey?: number;   // bump this from parent to force reload
 };
 
 // ---- Reverse-geocoded site label ----
@@ -204,6 +205,7 @@ export default function TaskDashboard({
   userRole,
   selectedTaskId,
   onSelectTask,
+  refreshKey = 0,
 }: Props) {
   const [tasks, setTasks] = useState<UserTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -357,7 +359,7 @@ export default function TaskDashboard({
 
   useEffect(() => {
     loadTasks();
-  }, [userName, userRole]);
+  }, [userName, userRole, refreshKey]);
 
   if (loading) {
     return (
