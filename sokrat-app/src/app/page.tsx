@@ -1454,13 +1454,23 @@ const saveTaskState = async (
         <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold mb-1">
           Available System Actions:
         </span>
-                {/* View Delivery Note */}
-        <button
-          onClick={() => setShowDeliveryNote(true)}
-          className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 font-bold p-2 rounded text-xs uppercase tracking-wider transition flex items-center justify-center gap-2"
-        >
-          📋 View Delivery Note
-        </button>
+                {/* View Delivery Note — only after loading complete */}
+        {currentAsset &&
+         (currentAsset.state === "LOADING_COMPLETED" ||
+          currentAsset.state.startsWith("DISPATCHED") ||
+          currentAsset.state === "ARRIVED_AT_GATE" ||
+          currentAsset.state.startsWith("RECEIVED_ON_SITE") ||
+          currentAsset.state === "GATE_IN_OFFLOADING" ||
+          currentAsset.state === "OFFLOADING_COMPLETED" ||
+          currentAsset.state === "INSTALLATION_INITIATED" ||
+          currentAsset.state === "INSTALLATION_COMPLETED") && (
+          <button
+            onClick={() => setShowDeliveryNote(true)}
+            className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 font-bold p-2 rounded text-xs uppercase tracking-wider transition flex items-center justify-center gap-2"
+          >
+            📋 View Delivery Note
+          </button>
+        )}
 
         {/* Current Scope Display & Controls */}
         <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg">
