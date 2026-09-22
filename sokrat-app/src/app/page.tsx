@@ -1737,12 +1737,15 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
           <p className="text-[9px] text-cyan-500 tracking-widest font-mono mt-0.5 uppercase">
             Smart Operations & Kinetic Real-Time Asset Twin
           </p>
-                    <button
-            onClick={resetAllData}
-            className="mt-3 text-[9px] bg-red-950/60 hover:bg-red-900 border border-red-800/60 text-red-400 px-3 py-1 rounded font-bold uppercase tracking-wider transition"
-          >
-            🔄 Reset All Data (Testing Only)
-          </button>
+                    {typeof window !== "undefined" &&
+            window.location.search.includes("demo=1") && (
+            <button
+              onClick={resetAllData}
+              className="mt-3 text-[9px] bg-red-950/60 hover:bg-red-900 border border-red-800/60 text-red-400 px-3 py-1 rounded font-bold uppercase tracking-wider transition"
+            >
+              🔄 Reset All Data (Testing Only)
+            </button>
+          )}
         </div>
         {/* Task Dashboard for current role */}
         
