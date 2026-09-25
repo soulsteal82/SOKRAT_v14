@@ -2,6 +2,9 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import dynamic from 'next/dynamic';
+import { useRouter } from "next/navigation";
+import { supabaseBrowser } from "@/app/lib/supabase-browser";
+import { useAuth } from "@/app/lib/auth-context";
 
 const getISOTimestamp = (): string => {
   return new Date().toISOString();
@@ -205,7 +208,11 @@ const fileToBase64 = (file: File): Promise<string> => {
 };
 
 export default function Home() {
-  const [profile, setProfile] = useState<"DISPATCHER" | "DRIVER" | "INSPECTOR" | "PLANNER">("DISPATCHER");
+  // ---- Auth context (current logged-in user) ----
+  const { profile: userProfile, signOut } = useAuth();
+
+  const [profile, setProfile] = useState<"DISPATCHER" | "DRIVER" | "INSPECTOR" | "PLANNER" | null>(null);
+
     const [selectedTask, setSelectedTask] = useState<SelectedTaskData | null>(null);
     const [taskRefreshKey, setTaskRefreshKey] = useState(0);
       const custodyLogRef = useRef<HTMLDivElement | null>(null);
@@ -1419,7 +1426,34 @@ const saveTaskState = async (
       setError("Reset failed: " + err.message);
     }
   };
+    // ============================================================
+  // Auth guard: redirect to /login if not authenticated
+  // (Placed AFTER all hooks, before any conditional return,
+  //  to satisfy React's Rules of Hooks.)
+  // ============================================================
+  const router = useRouter();
+  const [authChecked, setAuthChecked] = useState(false);
+
+  useEffect(() => {
+    supabaseBrowser.auth.getSession().then(({ data }) => {
+      if (!data.session) {
+        router.replace("/login");
+      } else {
+        setAuthChecked(true);
+      }
+    });
+  }, [router]);
+
+  // Sync the local `profile` state with the real user's role
+  // whenever the auth context loads or changes.
+  useEffect(() => {
+    if (userProfile?.role) {
+      setProfile(userProfile.role as any);
+    }
+  }, [userProfile?.role]);
+
   const renderDispatcherActions = () => {
+      if (!profile) return null; // guard against null during transition
     const loadingDuration = getLoadingDuration();
     
     // Certificate status variables - kept for UI display but NOT for validation
@@ -1717,6 +1751,39 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
       </div>
     );
   };
+    if (!authChecked) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center text-slate-400 text-xs font-mono">
+        Checking session…
+      </div>
+    );
+  }
+
+  if (!userProfile?.role) {
+    return (
+      <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4 text-slate-300 font-sans">
+        <div className="max-w-sm bg-slate-900 border border-slate-800 rounded-xl p-6 text-center space-y-3">
+          <div className="text-3xl">⚠️</div>
+          <div className="text-sm font-bold text-amber-400 uppercase tracking-wider">
+            No role assigned
+          </div>
+          <p className="text-xs text-slate-400">
+            Your account exists but hasn't been assigned a role yet.
+            Please contact your administrator.
+          </p>
+          <button
+            onClick={async () => {
+              await signOut();
+              router.replace("/login");
+            }}
+            className="w-full bg-red-950 hover:bg-red-900 border border-red-800 text-red-300 px-3 py-2 rounded text-xs font-bold uppercase tracking-wider transition"
+          >
+            Sign out
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-950 p-4 md:p-6 text-slate-100 flex flex-col items-center justify-start select-none font-sans">
@@ -1761,25 +1828,57 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
         
                 {/* Profile Switcher */}
         <div className="grid grid-cols-3 gap-2.5">
-          <div className="col-span-2 bg-slate-950 p-2.5 border border-slate-800 rounded-lg">
-            <label className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold mb-1">
-              [SYS_AUTH] Target Actor Node:
-            </label>
-            <select
-  className="w-full bg-slate-900 border border-slate-700 rounded p-1 text-xs text-cyan-400 focus:outline-none font-bold"
-  value={profile}
-  onChange={(e) => {
-    setProfile(e.target.value as any);
-    setSelectedTask(null);
-    setAssets([]);
-    setActiveAssetId("");
-  }}
->
-              <option value="DISPATCHER">DISPATCHER NODE (Plant)</option>
-              <option value="DRIVER">DRIVER NODE (Transit Log)</option>
-              <option value="INSPECTOR">INSPECTOR NODE (Site Structure)</option>
-              <option value="PLANNER">PLANNER NODE (RAMCO God-View)</option>
-            </select>
+          <div className="col-span-3 bg-slate-950 p-2.5 border border-slate-800 rounded-lg">
+            <div className="flex items-center justify-between mb-1.5">
+              <label className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold">
+                [SYS_AUTH] Authenticated As:
+              </label>
+              {userProfile && (
+                <span className="text-[8px] text-slate-500 font-mono flex items-center gap-2">
+                  <span>
+                    {userProfile.name || userProfile.email} ·{" "}
+                  </span>
+                  {userProfile.role === "PLANNER" && (
+                    <button
+                      onClick={() => router.push("/admin")}
+                      className="text-cyan-400 hover:text-cyan-300 underline font-bold"
+                    >
+                      🛡️ admin
+                    </button>
+                  )}
+                  <button
+                    onClick={async () => {
+                      await signOut();
+                      router.replace("/login");
+                    }}
+                    className="text-red-400 hover:text-red-300 underline"
+                  >
+                    sign out
+                  </button>
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <span
+                className={`text-xs px-3 py-1 rounded font-bold border ${
+                  profile === "DISPATCHER"
+                    ? "bg-cyan-950/50 text-cyan-400 border-cyan-800"
+                    : profile === "DRIVER"
+                    ? "bg-amber-950/50 text-amber-400 border-amber-800"
+                    : profile === "INSPECTOR"
+                    ? "bg-blue-950/50 text-blue-400 border-blue-800"
+                    : "bg-purple-950/50 text-purple-300 border-purple-800"
+                }`}
+              >
+                {profile === "DISPATCHER" && "🏭 DISPATCHER NODE (Plant)"}
+                {profile === "DRIVER" && "🚚 DRIVER NODE (Transit Log)"}
+                {profile === "INSPECTOR" && "🏗️ INSPECTOR NODE (Site Structure)"}
+                {profile === "PLANNER" && "📊 PLANNER NODE (God-View)"}
+              </span>
+              <span className="text-[9px] text-slate-500 italic">
+                Role assigned by your administrator
+              </span>
+            </div>
           </div>
         </div>
         {profile !== "PLANNER" && (
@@ -1791,7 +1890,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                 ? "Mohammed Ali"
                 : "Yusuf Al Hamadi"
             }
-            userRole={profile}
+                        userRole={profile!}
             selectedTaskId={selectedTask?.task_id || null}
             refreshKey={taskRefreshKey}
             onSelectTask={(task) => {
