@@ -104,7 +104,27 @@ export default function LoginPage() {
             {loading ? "Signing in..." : "Sign In"}
           </button>
         </form>
-
+        {/* Forgot password */}
+        <div className="mt-3 text-center">
+          <button
+            onClick={async () => {
+              const email = prompt("Enter your email for the reset link:");
+              if (!email) return;
+              const { error: resetErr } =
+                await supabaseBrowser.auth.resetPasswordForEmail(email, {
+                  redirectTo: `${window.location.origin}/reset-password`,
+                });
+              if (resetErr) {
+                alert("Failed: " + resetErr.message);
+              } else {
+                alert("Reset email sent. Check your inbox.");
+              }
+            }}
+            className="text-[10px] text-slate-400 hover:text-cyan-400 underline"
+          >
+            Forgot password?
+          </button>
+        </div>
         {/* Footer */}
         <p className="text-[9px] text-slate-500 text-center mt-4 leading-relaxed">
           Access is by invitation only.
