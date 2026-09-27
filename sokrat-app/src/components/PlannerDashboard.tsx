@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
-import { supabase } from "@/app/lib/supabase";
-import { classifyDelay } from "@/app/lib/delay";
+import { supabaseBrowser as supabase } from "@/app/lib/supabase-browser";import { classifyDelay } from "@/app/lib/delay";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import FleetRadar from "./FleetRadar";
 
