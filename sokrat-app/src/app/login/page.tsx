@@ -281,7 +281,23 @@ export default function LoginPage() {
         <div className="mt-3 text-center">
           <button
             type="button"
-            onClick={handleForgotPassword}
+            onClick={async () => {
+              if (!email) {
+                alert("Enter your email above first, then click 'Forgot password?'");
+                return;
+              }
+              const { error: resetErr } = await supabaseBrowser.auth.resetPasswordForEmail(
+                email,
+                {
+                  redirectTo: `${window.location.origin}/login?type=recovery`,
+                }
+              );
+              if (resetErr) {
+                alert("Failed: " + resetErr.message);
+              } else {
+                alert("If that email is registered, a reset link has been sent.");
+              }
+            }}
             className="text-[10px] text-slate-400 hover:text-cyan-400 underline"
           >
             Forgot password?
