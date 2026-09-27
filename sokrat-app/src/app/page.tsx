@@ -19,7 +19,7 @@ import NavigationPanel from "@/components/NavigationPanel";
 import FullScreenNav from "@/components/FullScreenNav";
 import PlannerDashboard from "@/components/PlannerDashboard";
 import { startDriverGpsBroadcast, DriverGpsHandle } from "@/app/lib/driverGps";
-import { supabase } from "../app/lib/supabase";
+import { supabaseBrowser as supabase } from "@/app/lib/supabase-browser";
 
 const DeliveryNoteModal = dynamic(
   () => import("@/components/DeliveryNoteModal"),

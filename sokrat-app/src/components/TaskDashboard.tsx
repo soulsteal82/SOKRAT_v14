@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { supabase } from "../app/lib/supabase";
+import { supabaseBrowser as supabase } from "@/app/lib/supabase-browser";
 import { reverseGeocode } from "../app/lib/geocode";
 import { fetchRoute } from "../app/lib/routing";
 import { simulateDriverAlongRoute } from "../app/lib/simulate";

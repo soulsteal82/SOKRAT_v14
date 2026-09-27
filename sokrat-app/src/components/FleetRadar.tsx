@@ -2,8 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
-import { supabase } from "@/app/lib/supabase";
-import type { RealtimeChannel } from "@supabase/supabase-js";
+import { supabaseBrowser as supabase } from "@/app/lib/supabase-browser";import type { RealtimeChannel } from "@supabase/supabase-js";
 
 const MapContainer = dynamic(
   () => import("react-leaflet").then((m) => m.MapContainer),

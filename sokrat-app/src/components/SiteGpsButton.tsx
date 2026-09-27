@@ -1,8 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { supabase } from "@/app/lib/supabase";
-
+import { supabaseBrowser as supabase } from "@/app/lib/supabase-browser";
 // ============================================================
 // Site GPS Panel
 // Two-way entry:
