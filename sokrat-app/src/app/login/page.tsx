@@ -13,6 +13,7 @@ export default function LoginPage() {
 
   // New password state (for recovery flow)
   const [isRecovery, setIsRecovery] = useState(false);
+    const [recoveryReady, setRecoveryReady] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [newPassword2, setNewPassword2] = useState("");
   const [recoveryError, setRecoveryError] = useState<string | null>(null);
@@ -21,6 +22,9 @@ export default function LoginPage() {
   // ------------------------------------------------------------
   // Detect recovery OR invite mode + handle existing session
   // ------------------------------------------------------------
+    // ------------------------------------------------------------
+  // Detect recovery OR invite mode + wait for session to establish
+  // ------------------------------------------------------------
   useEffect(() => {
     const detectMode = () => {
       if (typeof window === "undefined") return;
@@ -28,46 +32,54 @@ export default function LoginPage() {
       const search = window.location.search || "";
       const combined = hash + search;
 
-      // If the URL contains a recovery token OR the app was invoked via
-      // an invite link, we're in "set password" mode.
       if (
         combined.includes("type=recovery") ||
         combined.includes("type=invite") ||
-        combined.includes("access_token=") ||
-        combined.includes("error_description=")
+        combined.includes("access_token=")
       ) {
         setIsRecovery(true);
       }
     };
 
-    // 1. Run the mode-detection BEFORE checking session
     detectMode();
 
-    // 2. Check the current session
+    // Check session and mark ready
     supabaseBrowser.auth.getSession().then(({ data }) => {
-      // Only redirect to "/" if we're NOT in recovery/invite mode
-      if (data.session && !isRecoveryUrl()) {
+      const inRecovery = isRecoveryUrl();
+      if (data.session && !inRecovery) {
         router.replace("/");
+      } else if (data.session && inRecovery) {
+        setRecoveryReady(true);
       }
     });
 
-    // 3. Watch for auth state changes (invites + recoveries both fire PASSWORD_RECOVERY)
+    // Listen for auth changes
     const { data: sub } = supabaseBrowser.auth.onAuthStateChange(
       (event, session) => {
         console.log("[login] auth event:", event);
-        if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN" && isRecoveryUrl()) {
-          setIsRecovery(true);
-        } else if (event === "SIGNED_IN" && session && !isRecoveryUrl()) {
-          router.replace("/");
+        if ((event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") && session) {
+          setRecoveryReady(true);
+          if (!isRecoveryUrl()) {
+            router.replace("/");
+          }
         }
       }
     );
 
-    // 3b. Re-check after a short delay (Supabase needs a tick to parse the URL)
-    const t = setTimeout(detectMode, 400);
+    // Poll for session readiness — handles the URL parsing delay
+    let attempts = 0;
+    const poll = setInterval(async () => {
+      attempts++;
+      const { data } = await supabaseBrowser.auth.getSession();
+      if (data.session) {
+        setRecoveryReady(true);
+        clearInterval(poll);
+      }
+      if (attempts >= 20) clearInterval(poll);
+    }, 200);
 
     return () => {
-      clearTimeout(t);
+      clearInterval(poll);
       sub?.subscription?.unsubscribe();
     };
 
@@ -227,10 +239,14 @@ export default function LoginPage() {
 
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold p-2.5 rounded text-xs uppercase tracking-wider transition disabled:opacity-50"
+                disabled={loading || !recoveryReady}
+                className="w-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold p-2.5 rounded text-xs uppercase tracking-wider transition disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {loading ? "Saving…" : "Set new password"}
+                {!recoveryReady
+                  ? "Preparing session…"
+                  : loading
+                  ? "Saving…"
+                  : "Set new password"}
               </button>
             </form>
           )}
