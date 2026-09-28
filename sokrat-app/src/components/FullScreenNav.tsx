@@ -100,6 +100,7 @@ export default function FullScreenNav({
 }: Props) {
   const [delayOpen, setDelayOpen] = useState(false);
   const [delayBusy, setDelayBusy] = useState(false);
+    const [stepsOpen, setStepsOpen] = useState(false);
   const [L, setL] = useState<any>(null);
   const [icons, setIcons] = useState<{
     driverIcon: any;
@@ -199,7 +200,15 @@ export default function FullScreenNav({
           ⚠️ Log Delay
         </button>
       )}
-
+      {/* View All Steps floating button — top-left, opposite the Log Delay button */}
+      {!delayOpen && !stepsOpen && (
+        <button
+          onClick={() => setStepsOpen(true)}
+          className="absolute top-32 left-14 z-[10002] bg-slate-800/95 hover:bg-slate-700 text-cyan-300 text-xs font-black py-2 px-3 rounded-full shadow-2xl border border-cyan-700/60 flex items-center gap-1.5"
+        >
+          📋 View All Steps
+        </button>
+      )}
       {delayOpen && (
         <div className="absolute inset-0 z-[10002] bg-slate-950/95 backdrop-blur-sm flex flex-col items-center justify-center p-6">
                   <div className="w-full max-w-md bg-slate-900 border border-slate-700 rounded-xl p-5 space-y-4">
@@ -281,7 +290,112 @@ export default function FullScreenNav({
           </div>
         </div>
       )}
+      {/* All Steps bottom sheet */}
+      {stepsOpen && (
+        <div className="absolute inset-x-0 bottom-0 z-[10002] bg-slate-900/98 backdrop-blur border-t-2 border-cyan-800/60 rounded-t-2xl max-h-[60vh] flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-800">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📋</span>
+              <span className="text-xs font-black tracking-widest text-cyan-300 uppercase">
+                All Turn-by-Turn Steps
+              </span>
+              {route && (
+                <span className="text-[9px] text-slate-500 font-mono ml-2">
+                  {route.steps.length} step{route.steps.length === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
+            <button
+              onClick={() => setStepsOpen(false)}
+              className="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 px-3 py-1 rounded font-bold uppercase tracking-wider transition"
+            >
+              ✕ Close
+            </button>
+          </div>
 
+          {/* Steps list */}
+          <div className="flex-1 overflow-y-auto px-4 py-2">
+            {!route ? (
+              <div className="text-center py-8 text-xs text-slate-500 italic">
+                Route not yet computed.
+              </div>
+            ) : route.steps.length === 0 ? (
+              <div className="text-center py-8 text-xs text-slate-500 italic">
+                No steps available.
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {route.steps.map((step, i) => {
+                  const isCurrent = i === 0; // first step is the "next" one
+                  const distKm = step.distanceMeters > 0
+                    ? (step.distanceMeters / 1000).toFixed(2)
+                    : null;
+
+                  const icon =
+                    step.maneuver === "arrive"
+                      ? "🏁"
+                      : step.maneuver.includes("left")
+                      ? "⬅️"
+                      : step.maneuver.includes("right")
+                      ? "➡️"
+                      : step.maneuver.includes("ramp")
+                      ? "🛣️"
+                      : "⬆️";
+
+                  return (
+                    <div
+                      key={i}
+                      className={`flex items-start gap-3 px-3 py-2.5 rounded-lg transition ${
+                        isCurrent
+                          ? "bg-cyan-950/40 border border-cyan-800/60"
+                          : "hover:bg-slate-800/50 border border-transparent"
+                      }`}
+                    >
+                      <span className="text-xl mt-0.5 shrink-0">{icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <div
+                          className={`text-xs ${
+                            isCurrent
+                              ? "text-cyan-200 font-bold"
+                              : "text-slate-200"
+                          }`}
+                        >
+                          {step.instruction}
+                        </div>
+                        {distKm && (
+                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                            {isCurrent ? "In " : ""}
+                            {distKm} km
+                          </div>
+                        )}
+                      </div>
+                      {isCurrent && (
+                        <span className="text-[8px] bg-cyan-500 text-slate-950 font-black px-2 py-0.5 rounded uppercase tracking-wider shrink-0">
+                          Next
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Footer */}
+          <div className="px-4 py-2 border-t border-slate-800 text-[9px] text-slate-500 text-center font-mono">
+            {route ? (
+              <>
+                Total: {route.steps.length} step{route.steps.length === 1 ? "" : "s"} ·{" "}
+                {(route.distanceMeters / 1000).toFixed(1)} km ·{" "}
+                {Math.round(route.durationSeconds / 60)} min
+              </>
+            ) : (
+              "Waiting for route data"
+            )}
+          </div>
+        </div>
+      )}
       {/* Map fills the rest */}
       <div className="relative flex-1">
         {!hasCoords ? (
