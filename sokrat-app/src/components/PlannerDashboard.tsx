@@ -73,6 +73,7 @@ export default function PlannerDashboard() {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [radarOpen, setRadarOpen] = useState(false);
+    const [, setTick] = useState(0);
   const loadRows = async () => {
     // 1. Fetch every manifest
     const { data: manifests, error } = await supabase
@@ -157,6 +158,11 @@ export default function PlannerDashboard() {
   useEffect(() => {
     loadRows();
   }, []);
+    // Live clock — re-render every second so "Updated Xs ago" stays fresh
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Realtime subscription — re-fetch on any change to manifests or assets
   const channelRef = useRef<RealtimeChannel | null>(null);
@@ -232,7 +238,14 @@ export default function PlannerDashboard() {
         <div className="flex items-center gap-3">
           {lastRefresh && (
             <span className="text-[9px] text-slate-500 font-mono">
-              Updated {lastRefresh.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              Updated{" "}
+              {(() => {
+                const secs = Math.max(0, Math.round((Date.now() - lastRefresh.getTime()) / 1000));
+                if (secs < 60) return `${secs}s ago`;
+                const mins = Math.round(secs / 60);
+                if (mins < 60) return `${mins}m ago`;
+                return `${Math.round(mins / 60)}h ago`;
+              })()}
             </span>
           )}
           <button
