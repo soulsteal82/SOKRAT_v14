@@ -237,7 +237,11 @@ export default function PlannerDashboard() {
         </div>
         <div className="flex items-center gap-3">
           {lastRefresh && (
-            <span className="text-[9px] text-slate-500 font-mono">
+            <button
+              onClick={loadRows}
+              title="Force sync"
+              className="text-[9px] text-slate-500 hover:text-cyan-400 font-mono transition flex items-center gap-1"
+            >
               Updated{" "}
               {(() => {
                 const secs = Math.max(0, Math.round((Date.now() - lastRefresh.getTime()) / 1000));
@@ -246,19 +250,14 @@ export default function PlannerDashboard() {
                 if (mins < 60) return `${mins}m ago`;
                 return `${Math.round(mins / 60)}h ago`;
               })()}
-            </span>
+              <span className="opacity-60">⟳</span>
+            </button>
           )}
           <button
             onClick={() => setRadarOpen(true)}
             className="text-[9px] bg-cyan-600 hover:bg-cyan-500 border border-cyan-500 text-slate-950 px-3 py-1 rounded font-black uppercase tracking-wider transition"
           >
             🛰️ Launch Fleet Radar
-          </button>
-          <button
-            onClick={loadRows}
-            className="text-[9px] bg-purple-900/40 hover:bg-purple-900/70 border border-purple-800/60 text-purple-300 px-2 py-1 rounded font-bold uppercase tracking-wider transition"
-          >
-            ↻ Refresh
           </button>
         </div>
       </div>
