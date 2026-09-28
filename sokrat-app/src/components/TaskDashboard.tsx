@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabaseBrowser as supabase } from "@/app/lib/supabase-browser";
+import { useAuth } from "@/app/lib/auth-context";
 import { reverseGeocode } from "../app/lib/geocode";
 import { fetchRoute } from "../app/lib/routing";
 import { simulateDriverAlongRoute } from "../app/lib/simulate";
@@ -211,6 +212,7 @@ export default function TaskDashboard({
   onSelectTask,
   refreshKey = 0,
 }: Props) {
+  const { user, loading: authLoading } = useAuth();
   const [tasks, setTasks] = useState<UserTask[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
@@ -457,9 +459,13 @@ export default function TaskDashboard({
     setLoading(false);
   };
 
+  // Only fetch when auth is ready (prevents race condition where
+  // the query fires before the session cookie is parsed)
   useEffect(() => {
+    if (authLoading) return; // wait for auth
+    if (!user) return;       // no user, nothing to fetch
     loadTasks();
-  }, [userName, userRole, refreshKey]);
+  }, [userName, userRole, refreshKey, authLoading, user]);
 
   // ============================================================
   // Realtime: refresh the task list whenever a manifest changes.
@@ -470,6 +476,7 @@ export default function TaskDashboard({
   const rtDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+      if (authLoading || !user) return;
     const scheduleReload = () => {
       if (rtDebounceRef.current) clearTimeout(rtDebounceRef.current);
       rtDebounceRef.current = setTimeout(() => {
