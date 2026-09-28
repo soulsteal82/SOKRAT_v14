@@ -23,50 +23,73 @@ export default function LoginPage() {
   // Detect recovery OR invite mode + handle existing session
   // ------------------------------------------------------------
     // ------------------------------------------------------------
-  // Detect recovery OR invite mode + wait for session to establish
+   // ------------------------------------------------------------
+  // Detect recovery OR invite mode + parse URL session tokens
   // ------------------------------------------------------------
   useEffect(() => {
-    const detectMode = () => {
-      if (typeof window === "undefined") return;
-      const hash = window.location.hash || "";
-      const search = window.location.search || "";
-      const combined = hash + search;
-
-      if (
+    const isRecoveryUrl = () => {
+      if (typeof window === "undefined") return false;
+      const combined = (window.location.hash || "") + (window.location.search || "");
+      return (
         combined.includes("type=recovery") ||
         combined.includes("type=invite") ||
         combined.includes("access_token=")
-      ) {
-        setIsRecovery(true);
+      );
+    };
+
+    // 1. Detect mode
+    if (isRecoveryUrl()) {
+      setIsRecovery(true);
+    }
+
+    // 2. Explicitly parse the URL hash for session tokens.
+    //    Supabase's client doesn't always auto-parse on every load.
+    const parseUrlSession = async () => {
+      try {
+        // @ts-ignore — exists at runtime
+        const { data, error } = await supabaseBrowser.auth.getSessionFromUrl({
+          storeSession: true,
+        });
+        if (error) {
+          console.warn("[login] getSessionFromUrl error:", error.message);
+        }
+        if (data?.session) {
+          console.log("[login] session from URL obtained");
+          setRecoveryReady(true);
+        }
+      } catch (err: any) {
+        console.warn("[login] getSessionFromUrl threw:", err?.message);
       }
     };
 
-    detectMode();
+    if (isRecoveryUrl()) {
+      parseUrlSession();
+    }
 
-    // Check session and mark ready
+    // 3. Session check for non-recovery flow
     supabaseBrowser.auth.getSession().then(({ data }) => {
-      const inRecovery = isRecoveryUrl();
-      if (data.session && !inRecovery) {
+      if (data.session && !isRecoveryUrl()) {
         router.replace("/");
-      } else if (data.session && inRecovery) {
+      } else if (data.session && isRecoveryUrl()) {
         setRecoveryReady(true);
       }
     });
 
-    // Listen for auth changes
+    // 4. Watch for auth events
     const { data: sub } = supabaseBrowser.auth.onAuthStateChange(
       (event, session) => {
         console.log("[login] auth event:", event);
-        if ((event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") && session) {
-          setRecoveryReady(true);
-          if (!isRecoveryUrl()) {
+        if (session) {
+          if (isRecoveryUrl()) {
+            setRecoveryReady(true);
+          } else {
             router.replace("/");
           }
         }
       }
     );
 
-    // Poll for session readiness — handles the URL parsing delay
+    // 5. Poll as a fallback (in case events don't fire)
     let attempts = 0;
     const poll = setInterval(async () => {
       attempts++;
@@ -75,23 +98,13 @@ export default function LoginPage() {
         setRecoveryReady(true);
         clearInterval(poll);
       }
-      if (attempts >= 20) clearInterval(poll);
+      if (attempts >= 30) clearInterval(poll);
     }, 200);
 
     return () => {
       clearInterval(poll);
       sub?.subscription?.unsubscribe();
     };
-
-    function isRecoveryUrl() {
-      if (typeof window === "undefined") return false;
-      const combined = (window.location.hash || "") + (window.location.search || "");
-      return (
-        combined.includes("type=recovery") ||
-        combined.includes("type=invite") ||
-        combined.includes("access_token=")
-      );
-    }
   }, [router]);
 
   // ------------------------------------------------------------
