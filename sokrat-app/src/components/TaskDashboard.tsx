@@ -324,13 +324,20 @@ export default function TaskDashboard({
     setSimPos(null);
   };
 
-  const loadTasks = async () => {
+  const loadTasks = async (attempt = 1) => {
     const { data: taskData, error: taskError } = await supabase
       .from("user_tasks")
       .select("*")
       .eq("user_name", userName)
       .eq("user_role", userRole)
       .order("manifest_group_id", { ascending: true });
+
+    // Retry once if the query failed — likely a token refresh race
+    if (taskError && attempt < 2) {
+      console.warn(`[TaskDashboard] Query failed, retrying (attempt ${attempt + 1}):`, taskError.message);
+      await new Promise((r) => setTimeout(r, 800));
+      return loadTasks(attempt + 1);
+    }
 
     if (taskError || !taskData) {
       setLoading(false);
