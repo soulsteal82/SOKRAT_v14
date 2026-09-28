@@ -19,40 +19,67 @@ export default function LoginPage() {
   const [recoverySuccess, setRecoverySuccess] = useState(false);
 
   // ------------------------------------------------------------
-  // Detect recovery mode + handle existing session
+  // Detect recovery OR invite mode + handle existing session
   // ------------------------------------------------------------
   useEffect(() => {
-    // Check if there's already a session (user is logged in)
+    const detectMode = () => {
+      if (typeof window === "undefined") return;
+      const hash = window.location.hash || "";
+      const search = window.location.search || "";
+      const combined = hash + search;
+
+      // If the URL contains a recovery token OR the app was invoked via
+      // an invite link, we're in "set password" mode.
+      if (
+        combined.includes("type=recovery") ||
+        combined.includes("type=invite") ||
+        combined.includes("access_token=") ||
+        combined.includes("error_description=")
+      ) {
+        setIsRecovery(true);
+      }
+    };
+
+    // 1. Run the mode-detection BEFORE checking session
+    detectMode();
+
+    // 2. Check the current session
     supabaseBrowser.auth.getSession().then(({ data }) => {
-      if (data.session) {
+      // Only redirect to "/" if we're NOT in recovery/invite mode
+      if (data.session && !isRecoveryUrl()) {
         router.replace("/");
       }
     });
 
-    // Watch for auth state changes
+    // 3. Watch for auth state changes (invites + recoveries both fire PASSWORD_RECOVERY)
     const { data: sub } = supabaseBrowser.auth.onAuthStateChange(
       (event, session) => {
         console.log("[login] auth event:", event);
-        if (event === "PASSWORD_RECOVERY") {
+        if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN" && isRecoveryUrl()) {
           setIsRecovery(true);
-        } else if (session) {
+        } else if (event === "SIGNED_IN" && session && !isRecoveryUrl()) {
           router.replace("/");
         }
       }
     );
 
-    // Also check: if the URL contains a token + type=recovery, treat as recovery
-    if (typeof window !== "undefined") {
-      const hash = window.location.hash;
-      const search = window.location.search;
-      if (hash.includes("type=recovery") || search.includes("type=recovery")) {
-        setIsRecovery(true);
-      }
-    }
+    // 3b. Re-check after a short delay (Supabase needs a tick to parse the URL)
+    const t = setTimeout(detectMode, 400);
 
     return () => {
+      clearTimeout(t);
       sub?.subscription?.unsubscribe();
     };
+
+    function isRecoveryUrl() {
+      if (typeof window === "undefined") return false;
+      const combined = (window.location.hash || "") + (window.location.search || "");
+      return (
+        combined.includes("type=recovery") ||
+        combined.includes("type=invite") ||
+        combined.includes("access_token=")
+      );
+    }
   }, [router]);
 
   // ------------------------------------------------------------
