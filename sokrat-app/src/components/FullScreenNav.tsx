@@ -230,7 +230,7 @@ export default function FullScreenNav({
                   onClick={async () => {
                     setDelayBusy(true);
                     try {
-                      const { supabase } = await import("@/app/lib/supabase");
+const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser");
                       const now = new Date().toISOString();
 
                       // Update all assets for this manifest:

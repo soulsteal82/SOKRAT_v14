@@ -1451,6 +1451,16 @@ const saveTaskState = async (
       setProfile(userProfile.role as any);
     }
   }, [userProfile?.role]);
+    // Poll the assets table every 5 seconds for the currently
+  // expanded task — keeps custody history, panel states, and
+  // timestamps fresh across all users.
+  useEffect(() => {
+    if (!selectedTask?.manifest_group_id) return;
+    const id = setInterval(() => {
+      loadAssetsForTask(selectedTask.manifest_group_id);
+    }, 5000);
+    return () => clearInterval(id);
+  }, [selectedTask?.manifest_group_id]);
 
   const renderDispatcherActions = () => {
       if (!profile) return null; // guard against null during transition
