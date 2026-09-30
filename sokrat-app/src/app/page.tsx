@@ -1489,22 +1489,15 @@ const saveTaskState = async (
           Available System Actions:
         </span>
                 {/* View Delivery Note — only after loading complete */}
-        {currentAsset &&
-         (currentAsset.state === "LOADING_COMPLETED" ||
-          currentAsset.state.startsWith("DISPATCHED") ||
-          currentAsset.state === "ARRIVED_AT_GATE" ||
-          currentAsset.state.startsWith("RECEIVED_ON_SITE") ||
-          currentAsset.state === "GATE_IN_OFFLOADING" ||
-          currentAsset.state === "OFFLOADING_COMPLETED" ||
-          currentAsset.state === "INSTALLATION_INITIATED" ||
-          currentAsset.state === "INSTALLATION_COMPLETED") && (
-          <button
-            onClick={() => setShowDeliveryNote(true)}
-            className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 font-bold p-2 rounded text-xs uppercase tracking-wider transition flex items-center justify-center gap-2"
-          >
-            📋 View Delivery Note
-          </button>
-        )}
+{currentAsset &&
+ currentAsset.state.startsWith("DISPATCHED") && (
+  <button
+    onClick={() => setShowDeliveryNote(true)}
+    className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 font-bold p-2 rounded text-xs uppercase tracking-wider transition flex items-center justify-center gap-2"
+  >
+    📋 View Delivery Note
+  </button>
+)}
 
         {/* Current Scope Display & Controls */}
         <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg">
@@ -2310,12 +2303,14 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                     }}
                   />
                                     {/* View Delivery Note — inspector can verify against physical copy */}
-                  <button
-                    onClick={() => setShowDeliveryNote(true)}
-                    className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 font-bold p-2 rounded text-xs uppercase tracking-wider transition flex items-center justify-center gap-2"
-                  >
-                    📋 View Delivery Note
-                  </button>
+{currentAsset?.state?.startsWith("DISPATCHED") && (
+  <button
+    onClick={() => setShowDeliveryNote(true)}
+    className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 font-bold p-2 rounded text-xs uppercase tracking-wider transition flex items-center justify-center gap-2"
+  >
+    📋 View Delivery Note
+  </button>
+)}
                   <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg text-xs space-y-1.5">
   {/* Compute document presence + scan state once, so both the checkbox
       and its label use the same rule. */}
