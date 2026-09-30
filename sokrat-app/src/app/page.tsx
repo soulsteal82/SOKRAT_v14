@@ -1898,12 +1898,37 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
             onTaskDataChange={(task) => {
               // Fires every 5s + on Realtime events. Keeps parent
               // panels (nav, delivery note, custody ledger) in sync.
-              if (task) {
-                setSelectedTask((prev) => {
-                  if (!prev || prev.task_id !== task.task_id) return prev;
-                  return task;
-                });
-              }
+              // Only updates if something meaningfully changed — prevents
+              // flicker from identical-data re-renders.
+              if (!task) return;
+              setSelectedTask((prev) => {
+                if (!prev || prev.task_id !== task.task_id) return prev;
+
+                // Compare the fields that actually drive UI re-renders.
+                const changed =
+                  prev.site_latitude !== task.site_latitude ||
+                  prev.site_longitude !== task.site_longitude ||
+                  prev.site_gps_source !== task.site_gps_source ||
+                  prev.site_gps_updated_at !== task.site_gps_updated_at ||
+                  prev.driver_current_lat !== task.driver_current_lat ||
+                  prev.driver_current_lng !== task.driver_current_lng ||
+                  prev.driver_last_update !== task.driver_last_update ||
+                  prev.driver_status !== task.driver_status ||
+                  prev.selected_scope !== task.selected_scope ||
+                  prev.selected_defect !== task.selected_defect ||
+                  prev.delivery_note_url !== task.delivery_note_url ||
+                  prev.epd1_url !== task.epd1_url ||
+                  prev.mix1_url !== task.mix1_url ||
+                  prev.epd2_url !== task.epd2_url ||
+                  prev.mix2_url !== task.mix2_url ||
+                  prev.current_stage !== task.current_stage ||
+                  JSON.stringify(prev.factories) !== JSON.stringify(task.factories);
+
+                // No meaningful change → return the SAME reference so
+                // React skips the re-render entirely. This kills the flicker.
+                if (!changed) return prev;
+                return task;
+              });
             }}
             onSelectTask={(task) => {
   if (!task) {
