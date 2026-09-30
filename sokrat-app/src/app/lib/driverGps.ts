@@ -10,7 +10,7 @@
 // blocks the geolocation prompt.
 // ============================================================
 
-import { supabase } from "./supabase";
+import { supabaseBrowser as supabase } from "./supabase-browser";
 
 export type DriverGpsHandle = {
   stop: () => void;
