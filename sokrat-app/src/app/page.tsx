@@ -444,6 +444,56 @@ const currentAsset = assets.length > 0
       setAssets(loadedAssets);
       setActiveAssetId(loadedAssets[0].id);
     }
+
+    // === Option C ===
+    // Also refresh the selected task's manifest fields on the same
+    // 5-second cadence as assets. This eliminates the race condition
+    // where two independent polls update different parts of the UI
+    // at different times, causing "sometimes updates, sometimes doesn't".
+    const { data: manifestData } = await supabase
+      .from("manifests")
+      .select("*")
+      .eq("manifest_group_id", manifestGroupId)
+      .single();
+
+    if (manifestData) {
+      setSelectedTask((prev) => {
+        if (!prev || prev.manifest_group_id !== manifestGroupId) return prev;
+        return {
+          ...prev,
+          driver_current_lat: manifestData.driver_current_lat,
+          driver_current_lng: manifestData.driver_current_lng,
+          driver_last_update: manifestData.driver_last_update,
+          driver_status: manifestData.driver_status,
+          site_latitude: manifestData.site_latitude,
+          site_longitude: manifestData.site_longitude,
+          site_gps_source: manifestData.site_gps_source,
+          site_gps_updated_at: manifestData.site_gps_updated_at,
+          current_stage: manifestData.current_stage,
+          selected_scope: manifestData.selected_scope,
+          selected_defect: manifestData.selected_defect,
+          delivery_note_url: manifestData.delivery_note_url,
+          delivery_note_file_name: manifestData.delivery_note_file_name,
+          epd1_url: manifestData.epd1_url,
+          mix1_url: manifestData.mix1_url,
+          epd2_url: manifestData.epd2_url,
+          mix2_url: manifestData.mix2_url,
+          driver_name: manifestData.driver_name,
+          driver_phone: manifestData.driver_phone,
+          driver_rating: manifestData.driver_rating,
+          driver_total_trips: manifestData.driver_total_trips,
+          vehicle_plate: manifestData.vehicle_plate,
+          vehicle_trailer_type: manifestData.vehicle_trailer_type,
+          vehicle_ownership: manifestData.vehicle_ownership,
+          inspector_name: manifestData.inspector_name,
+          inspector_phone: manifestData.inspector_phone,
+          inspector_email: manifestData.inspector_email,
+          factories: manifestData.factories || prev.factories,
+          order_details: manifestData.order_details || prev.order_details,
+        };
+      });
+    }
+    // === end Option C ===
   };
 
 
