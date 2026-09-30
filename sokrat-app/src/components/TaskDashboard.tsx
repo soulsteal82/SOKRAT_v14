@@ -89,6 +89,7 @@ type Props = {
   userRole: string;
   selectedTaskId?: string | null;
   onSelectTask?: (task: SelectedTaskData | null) => void;
+  onTaskDataChange?: (task: SelectedTaskData | null) => void;
   refreshKey?: number;   // bump this from parent to force reload
 };
 
@@ -210,6 +211,7 @@ export default function TaskDashboard({
   userRole,
   selectedTaskId,
   onSelectTask,
+  onTaskDataChange,
   refreshKey = 0,
 }: Props) {
   const { user, loading: authLoading } = useAuth();
@@ -463,55 +465,59 @@ useEffect(() => { expandedTaskIdRef.current = expandedTaskId; }, [expandedTaskId
       return a.manifest_group_id.localeCompare(b.manifest_group_id);
     });
 
-    setTasks(sorted);
+        setTasks(sorted);
     setLoading(false);
 
-    // NEW: if a task is currently expanded, re-emit it so the parent
-    // (Home.tsx) gets the fresh reference — fixes stale site GPS / driver
-    // GPS propagation after Realtime updates.
-      if (expandedTaskIdRef.current && onSelectTask) {
-      const refreshed = sorted.find((t) => t.id === expandedTaskIdRef.current);
-      if (refreshed) {
-        onSelectTask({
-          task_id: refreshed.id,
-          manifest_group_id: refreshed.manifest_group_id,
-          status: refreshed.status,
-          priority: refreshed.priority,
-          assigned_by: refreshed.assigned_by,
-          assigned_at: refreshed.assigned_at,
-          trip_details: refreshed.trip_details,
-          factories: refreshed.factories || [],
-          driver_name: refreshed.driver_name,
-          driver_phone: refreshed.driver_phone,
-          driver_rating: refreshed.driver_rating,
-          driver_total_trips: refreshed.driver_total_trips,
-          vehicle_plate: refreshed.vehicle_plate,
-          vehicle_trailer_type: refreshed.vehicle_trailer_type,
-          vehicle_ownership: refreshed.vehicle_ownership,
-          inspector_name: refreshed.inspector_name,
-          inspector_phone: refreshed.inspector_phone,
-          inspector_email: refreshed.inspector_email,
-          driver_current_lat: refreshed.driver_current_lat,
-          driver_current_lng: refreshed.driver_current_lng,
-          driver_last_update: refreshed.driver_last_update,
-          driver_status: refreshed.driver_status,
-          site_name: refreshed.site_name,
-          site_latitude: refreshed.site_latitude,
-          site_longitude: refreshed.site_longitude,
-          site_gps_source: refreshed.site_gps_source,
-          site_gps_updated_at: refreshed.site_gps_updated_at,
-          selected_scope: refreshed.selected_scope,
-          selected_defect: refreshed.selected_defect,
-          dispatcher_panels_count: refreshed.dispatcher_panels_count,
-          dispatcher_notes: refreshed.dispatcher_notes,
-          epd1_url: refreshed.epd1_url,
-          mix1_url: refreshed.mix1_url,
-          epd2_url: refreshed.epd2_url,
-          mix2_url: refreshed.mix2_url,
-          delivery_note_url: refreshed.delivery_note_url,
-          delivery_note_file_name: refreshed.delivery_note_file_name,
-          order_details: refreshed.order_details,
-        });
+    // Notify the parent whenever the expanded task's data refreshes,
+    // so its role-specific panels stay in sync across all browsers.
+    if (onTaskDataChange) {
+      if (expandedTaskId) {
+        const refreshed = sorted.find((t) => t.id === expandedTaskId);
+        if (refreshed) {
+          onTaskDataChange({
+            task_id: refreshed.id,
+            manifest_group_id: refreshed.manifest_group_id,
+            status: refreshed.status,
+            priority: refreshed.priority,
+            assigned_by: refreshed.assigned_by,
+            assigned_at: refreshed.assigned_at,
+            trip_details: refreshed.trip_details,
+            factories: refreshed.factories || [],
+            driver_name: refreshed.driver_name,
+            driver_phone: refreshed.driver_phone,
+            driver_rating: refreshed.driver_rating,
+            driver_total_trips: refreshed.driver_total_trips,
+            vehicle_plate: refreshed.vehicle_plate,
+            vehicle_trailer_type: refreshed.vehicle_trailer_type,
+            vehicle_ownership: refreshed.vehicle_ownership,
+            inspector_name: refreshed.inspector_name,
+            inspector_phone: refreshed.inspector_phone,
+            inspector_email: refreshed.inspector_email,
+            driver_current_lat: refreshed.driver_current_lat,
+            driver_current_lng: refreshed.driver_current_lng,
+            driver_last_update: refreshed.driver_last_update,
+            driver_status: refreshed.driver_status,
+            site_name: refreshed.site_name,
+            site_latitude: refreshed.site_latitude,
+            site_longitude: refreshed.site_longitude,
+            site_gps_source: refreshed.site_gps_source,
+            site_gps_updated_at: refreshed.site_gps_updated_at,
+            selected_scope: refreshed.selected_scope,
+            selected_defect: refreshed.selected_defect,
+            dispatcher_panels_count: refreshed.dispatcher_panels_count,
+            dispatcher_notes: refreshed.dispatcher_notes,
+            epd1_url: refreshed.epd1_url,
+            mix1_url: refreshed.mix1_url,
+            epd2_url: refreshed.epd2_url,
+            mix2_url: refreshed.mix2_url,
+            delivery_note_url: refreshed.delivery_note_url,
+            delivery_note_file_name: refreshed.delivery_note_file_name,
+            order_details: refreshed.order_details,
+          });
+        }
+      } else {
+        // No expanded task — pass null so the parent clears its state
+        onTaskDataChange(null);
       }
     }
   };
@@ -530,8 +536,7 @@ useEffect(() => { expandedTaskIdRef.current = expandedTaskId; }, [expandedTaskId
   // ============================================================
   const rtChannelRef = useRef<RealtimeChannel | null>(null);
   const rtDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Fallback polling — for browsers that throttle or kill WebSockets
-  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
       if (authLoading || !user) return;
@@ -560,10 +565,8 @@ rtDebounceRef.current = setTimeout(() => {
 
     rtChannelRef.current = channel;
 
-      // Fallback polling — every 5 seconds, refresh the task list.
-    // This ensures updates arrive even if the browser throttles or
-    // disconnects the Realtime WebSocket (Firefox, Samsung Internet,
-    // aggressive power-save modes, corporate proxies, etc).
+    // Fallback polling — refreshes task data every 5 seconds.
+    // Works on all browsers regardless of Realtime WebSocket state.
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     pollIntervalRef.current = setInterval(() => {
       loadTasks();

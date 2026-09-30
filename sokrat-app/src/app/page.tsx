@@ -1892,9 +1892,19 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                 ? "Mohammed Ali"
                 : "Yusuf Al Hamadi"
             }
-                        userRole={profile!}
+                                               userRole={profile!}
             selectedTaskId={selectedTask?.task_id || null}
             refreshKey={taskRefreshKey}
+            onTaskDataChange={(task) => {
+              // Fires every 5s + on Realtime events. Keeps parent
+              // panels (nav, delivery note, custody ledger) in sync.
+              if (task) {
+                setSelectedTask((prev) => {
+                  if (!prev || prev.task_id !== task.task_id) return prev;
+                  return task;
+                });
+              }
+            }}
             onSelectTask={(task) => {
   if (!task) {
     // Task was collapsed — clear everything
