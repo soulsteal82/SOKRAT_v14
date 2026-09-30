@@ -1456,7 +1456,9 @@ const saveTaskState = async (
   // timestamps fresh across all users.
   useEffect(() => {
     if (!selectedTask?.manifest_group_id) return;
+    console.log("[ASSETS POLL] starting for", selectedTask.manifest_group_id);
     const id = setInterval(() => {
+      console.log("[ASSETS POLL] firing for", selectedTask.manifest_group_id);
       loadAssetsForTask(selectedTask.manifest_group_id);
     }, 5000);
     return () => clearInterval(id);
