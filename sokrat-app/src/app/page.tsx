@@ -215,7 +215,6 @@ export default function Home() {
 
     const [selectedTask, setSelectedTask] = useState<SelectedTaskData | null>(null);
     const [taskRefreshKey, setTaskRefreshKey] = useState(0);
-    const [globalRemountKey, setGlobalRemountKey] = useState(0);
       const custodyLogRef = useRef<HTMLDivElement | null>(null);
         const [showFullScreenNav, setShowFullScreenNav] = useState(false);
           // Driver live GPS broadcast
@@ -1444,15 +1443,7 @@ const saveTaskState = async (
       }
     });
   }, [router]);
-// Global remount pulse — every 5 seconds, forces a fresh render
-// with fresh data from Supabase. Works across all browsers
-// regardless of Realtime WebSocket state.
-useEffect(() => {
-  const id = setInterval(() => {
-    setGlobalRemountKey((k) => k + 1);
-  }, 5000);
-  return () => clearInterval(id);
-}, []);
+
   // Sync the local `profile` state with the real user's role
   // whenever the auth context loads or changes.
   useEffect(() => {
@@ -1788,7 +1779,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
   }
 
     return (
-    <div key={globalRemountKey} className="min-h-screen bg-slate-950 p-4 md:p-6 text-slate-100 flex flex-col items-center justify-start select-none font-sans">
+    <div className="min-h-screen bg-slate-950 p-4 md:p-6 text-slate-100 flex flex-col items-center justify-start select-none font-sans">
       {isScanning && (
         <div className="absolute inset-0 bg-slate-950/90 z-50 flex flex-col items-center justify-center p-6 text-center animate-fade-in">
           <div className="w-56 h-56 border-2 border-cyan-500 rounded-xl relative flex flex-col items-center justify-center bg-slate-900 shadow-[0_0_40px_rgba(6,182,212,0.15)]">
