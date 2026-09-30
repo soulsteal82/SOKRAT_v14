@@ -569,6 +569,7 @@ rtDebounceRef.current = setTimeout(() => {
     // Works on all browsers regardless of Realtime WebSocket state.
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
     pollIntervalRef.current = setInterval(() => {
+      console.log("[TaskDashboard POLL] firing loadTasks");
       loadTasks();
     }, 5000);
 
