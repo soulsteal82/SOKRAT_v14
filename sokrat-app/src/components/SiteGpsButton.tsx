@@ -143,12 +143,12 @@ export default function SiteGpsButton({
         {busy ? "⏳ Sending..." : "📍 Share Current Site GPS to Planning"}
       </button>
 
-      <button
-        onClick={() => setManual((v) => !v)}
-        className="w-full text-[8px] text-slate-400 hover:text-cyan-400 underline"
-      >
-        {manual ? "▲ hide manual entry" : "▼ or enter coordinates manually"}
-      </button>
+<button
+  onClick={() => setManual((v) => !v)}
+  className="w-full text-xs text-slate-400 hover:text-cyan-400 underline"
+>
+  {manual ? "▲ hide manual entry" : "▼ or enter coordinates manually"}
+</button>
 
       {manual && (
         <div className="grid grid-cols-2 gap-2">

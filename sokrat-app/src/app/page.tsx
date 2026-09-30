@@ -1805,11 +1805,11 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
       <div className="w-full max-w-xl bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-2xl relative space-y-4">
         {/* Header with Logo */}
         <div className="flex flex-col items-center justify-center border-b border-slate-800/80 pb-4 text-center">
-          <img
-            src="./Images/Logo.jpg"
-            alt="S.O.K.R.A.T. Logo"
-            className="h-16 w-auto mb-2 object-contain"
-          />
+<img
+  src="./Images/Logo.jpg"
+  alt="S.O.K.R.A.T. Logo"
+  className="h-24 w-auto mb-2 object-contain"
+/>
           <h1 className="text-xl font-black tracking-[0.25em] text-slate-100">S.O.K.R.A.T.</h1>
           <p className="text-[9px] text-cyan-500 tracking-widest font-mono mt-0.5 uppercase">
             Smart Operations & Kinetic Real-Time Asset Twin
