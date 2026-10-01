@@ -1940,10 +1940,10 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
           <TaskDashboard
             userName={
               profile === "DISPATCHER"
-                ? "Khalid Al Suwaidi"
+                ? "Dispatcher 1"
                 : profile === "DRIVER"
-                ? "Mohammed Ali"
-                : "Yusuf Al Hamadi"
+                ? "Driver 1"
+                : "Inspector 1"
             }
                                                userRole={profile!}
             selectedTaskId={selectedTask?.task_id || null}
