@@ -32,8 +32,15 @@ const FitBounds = dynamic(
         points: [number, number][];
       }) {
         const map = useMap();
+        const hasFittedRef = require("react").useRef(false);
+
         useEffect(() => {
           if (!map || points.length === 0) return;
+          // Only fit the bounds ONCE — the first time vehicles are loaded.
+          // Subsequent updates should not move the user's view.
+          if (hasFittedRef.current) return;
+          hasFittedRef.current = true;
+
           try {
             if (points.length === 1) {
               map.setView(points[0], 12);
@@ -43,7 +50,7 @@ const FitBounds = dynamic(
           } catch (e) {
             console.warn("[FleetRadar] fitBounds failed", e);
           }
-        }, [map, JSON.stringify(points)]);
+        }, [map, points]);
         return null;
       };
     }),
