@@ -126,7 +126,7 @@ function SiteRow({ task }: { task: UserTask }) {
 
   if (!hasCoords) {
     display = "Awaiting coordinates";
-    subLabel = "Inspector or RAMCO has not shared GPS yet";
+    subLabel = "Inspector/ERP has not shared GPS yet";
   } else if (geoLabel) {
     display = geoLabel;
     subLabel = `${task.site_latitude!.toFixed(4)}, ${task.site_longitude!.toFixed(4)}`;
@@ -167,7 +167,7 @@ function SiteRow({ task }: { task: UserTask }) {
               className={`px-1.5 py-0.5 rounded font-bold ${
                 task.site_gps_source === "INSPECTOR"
                   ? "bg-cyan-950/50 text-cyan-400"
-                  : task.site_gps_source === "RAMCO"
+                  : task.site_gps_source === "ERP"
                   ? "bg-purple-950/50 text-purple-300"
                   : "bg-slate-800 text-slate-400"
               }`}

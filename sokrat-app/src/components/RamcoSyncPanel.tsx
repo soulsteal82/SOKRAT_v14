@@ -3,7 +3,7 @@
 import React from "react";
 
 // ============================================================
-// RAMCO Sync Panel
+// ERP Sync Panel
 // Read-only display of certificates auto-fed by RAMCO.
 // Replaces the old dispatcher manual upload UI.
 //
@@ -63,7 +63,7 @@ export default function RamcoSyncPanel({
     <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[8px] text-slate-400 uppercase font-bold">
-          🔗 Document Source: RAMCO
+          🔗 Document Source: ERP
         </span>
         <span
           className={`text-[8px] px-2 py-0.5 rounded font-bold ${
@@ -78,7 +78,7 @@ export default function RamcoSyncPanel({
             ? "✅ FULLY SYNCED"
             : syncedCount > 0
             ? `⏳ ${syncedCount}/4 SYNCED`
-            : "⏳ AWAITING RAMCO"}
+            : "⏳ AWAITING ERP"}
         </span>
       </div>
 
@@ -101,7 +101,7 @@ export default function RamcoSyncPanel({
               </a>
             ) : (
               <span className="text-amber-500 italic">
-                awaiting RAMCO
+                awaiting ERP
               </span>
             )}
           </div>
@@ -119,7 +119,7 @@ export default function RamcoSyncPanel({
 
       {isDemoMode && (
         <div className="mt-1 text-[7px] text-amber-500/70 italic text-center">
-          [DEMO DATA] — will be live from RAMCO
+          [DEMO DATA] — will be live from ERP
         </div>
       )}
     </div>

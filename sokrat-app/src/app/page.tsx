@@ -656,7 +656,7 @@ function getAssetCustody(state: string | null | undefined, selectedTask?: any): 
     const stage = selectedTask?.current_stage || 1;
     const totalStages = selectedTask?.factories?.length || 1;
     if (dispatcher && totalStages > 1) {
-      return `FACTORIES ${String.fromCharCode(64 + stage)} (${dispatcher})`;
+      return `FACTORy ${String.fromCharCode(64 + stage)} (${dispatcher})`;
       // Stage 1 → "FACTORIES A", Stage 2 → "FACTORIES B"
     }
     return "FACTORY (Dispatcher)";
@@ -1686,7 +1686,7 @@ onClick={() => {
 
 
 
-        {/* RAMCO-Fed Certificates (read-only) */}
+        {/* ERP-Fed Certificates (read-only) */}
         <RamcoSyncPanel
           epd1_url={currentAsset?.epd1_certificate_url}
           epd1_file_name={currentAsset?.epd1_file_name}
@@ -2278,16 +2278,12 @@ Reason for Delay
 Panel ID
               </span>
               <span className="font-mono font-bold text-slate-300 truncate block">
-                {profile === "INSPECTOR" && !currentAsset?.hasScannedQR
-                  ? "[SCAN REQUIRED]"
-                  : currentAsset?.state === "INITIALIZED" && !currentAsset?.hasScannedQR
-                  ? "[AWAITING SCAN SYNC]"
-                  : currentAsset?.id}
+                 {currentAsset?.id}
               </span>
             </div>
             <div>
               <span className="block text-[8px] text-slate-500 uppercase tracking-wider">
-                System State Value:
+Status:
               </span>
               <span
                 className={`font-bold tracking-wide uppercase ${
@@ -2400,7 +2396,7 @@ Panel ID
               </span>
               {!currentAsset?.state.includes("REJECTED") ? (
                 <div className="space-y-3">
-                                  {/* Site GPS sharing — two-way with RAMCO planner */}
+                                  {/* Site GPS sharing — two-way with ERP planner */}
                   <SiteGpsButton
                     manifestGroupId={manifest.manifest_group_id}
                     siteName={selectedTask?.site_name}
