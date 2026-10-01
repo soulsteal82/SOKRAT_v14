@@ -1800,7 +1800,7 @@ onClick={async () => {
   }
 }}
             disabled={isButtonDisabled}
-            className="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold p-2 rounded text-xs uppercase tracking-wider transition disabled:bg-slate-900 disabled:text-slate-600 border disabled:border-slate-800/40 disabled:opacity-40 disabled:pointer-events-none"
+            className="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold p-4 rounded text-base uppercase tracking-wider transition disabled:bg-slate-900 disabled:text-slate-600 border disabled:border-slate-800/40 disabled:opacity-40 disabled:pointer-events-none"
           >
             {getDispatcherButtonLabel()}
           </button>
@@ -1815,7 +1815,7 @@ onClick={async () => {
               );
             }}
 disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(currentAsset?.state || "")}
-            className="bg-red-950 hover:bg-red-900 text-red-400 border border-red-900/60 font-bold p-2 rounded text-xs uppercase tracking-wider transition disabled:opacity-30 disabled:pointer-events-none"
+            className="bg-red-950 hover:bg-red-900 text-red-400 border border-red-900/60 font-bold p-4 rounded text-base uppercase tracking-wider transition disabled:opacity-30 disabled:pointer-events-none"
           >
             ❌ Reject Panel
           </button>
@@ -2153,7 +2153,7 @@ Reason for Delay
                         }
                       }}
                       disabled={!currentAsset?.state.startsWith("DISPATCHED")}
-                      className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold p-3 rounded text-xs uppercase disabled:opacity-30 disabled:pointer-events-none transition"
+                       className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold p-4 rounded text-base uppercase disabled:opacity-30 disabled:pointer-events-none transition"
                     >
                       {getDriverButtonText()}
                     </button>
@@ -2184,7 +2184,7 @@ Reason for Delay
                         });
                       }}
                       disabled={!currentAsset?.state.startsWith("DISPATCHED") || !selectedDelayReason}
-                      className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-4 rounded text-xs uppercase disabled:opacity-30 disabled:pointer-events-none transition"
+                      className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-5 rounded text-base uppercase disabled:opacity-30 disabled:pointer-events-none transition"
                     >
                       ⚠ Report a Delay
                     </button>
@@ -2594,9 +2594,9 @@ Status:
                             const stateWithDefect = `RECEIVED_ON_SITE_${defectLabel}`;
                             transitionAllAssets(stateWithDefect);
                           }}
-                          className="col-span-2 bg-green-600 hover:bg-green-500 text-slate-950 font-bold p-2.5 rounded text-xs uppercase tracking-wider transition"
+                                                    className="col-span-2 bg-green-600 hover:bg-green-500 text-slate-950 font-bold p-4 rounded text-base uppercase tracking-wider transition"
                         >
-✅ Received & Approved — {selectedInspectorDefect.toUpperCase()}
+                          ✅ Received & Approved — {selectedInspectorDefect.toUpperCase()}
                         </button>
                       )}
                       {(currentAsset?.state.startsWith("RECEIVED_ON_SITE") ||
@@ -2624,7 +2624,7 @@ Status:
                             (currentAsset?.state === "OFFLOADING_COMPLETED" || currentAsset?.state === "INSTALLATION_INITIATED") &&
                             !manifest.geofence_verified
                           }
-                          className="col-span-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold p-2.5 rounded text-xs uppercase tracking-wider transition disabled:opacity-30 disabled:pointer-events-none"
+                          className="col-span-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold p-4 rounded text-base uppercase tracking-wider transition disabled:opacity-30 disabled:pointer-events-none"
                         >
                           {currentAsset?.state.startsWith("RECEIVED_ON_SITE") && "🔄 Start Unloading"}
                           {currentAsset?.state === "GATE_IN_OFFLOADING" && "✅ Unloading Complete"}
@@ -2691,7 +2691,7 @@ Status:
                             <button
                               key={star}
                               onClick={() => setRatingScore(star)}
-                              className={`text-2xl transition ${
+                              className={`text-4xl transition ${
                                 ratingScore >= star ? 'text-amber-400' : 'text-slate-600 hover:text-slate-400'
                               }`}
                             >
@@ -2707,7 +2707,7 @@ Status:
                         />
                         <button
                           onClick={submitRating}
-                          className="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold py-1.5 rounded text-xs uppercase transition"
+                          className="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold py-3 rounded text-base uppercase transition"
                         >
                           Submit Rating
                         </button>

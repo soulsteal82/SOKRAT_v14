@@ -138,7 +138,7 @@ export default function SiteGpsButton({
       <button
         onClick={handleShareCurrent}
         disabled={busy}
-        className="w-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold p-2 rounded text-xs uppercase transition disabled:opacity-50"
+        className="w-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold p-4 rounded text-base uppercase transition disabled:opacity-50"
       >
         {busy ? "⏳ Sending..." : "📍 Send My Location"}
       </button>
@@ -169,7 +169,7 @@ export default function SiteGpsButton({
           <button
             onClick={handleSaveManual}
             disabled={busy}
-            className="col-span-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold p-1.5 rounded text-xs uppercase transition"
+            className="col-span-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold p-3 rounded text-base uppercase transition"
           >
             💾 Save Manual Coordinates
           </button>
