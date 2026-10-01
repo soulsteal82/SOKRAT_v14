@@ -522,9 +522,9 @@ const currentAsset = assets.length > 0
   // Helper to get driver button text
   const getDriverButtonText = () => {
     if (manifest.scope === "DELIVERY_ONLY") {
-      return "✅ Confirm Delivery Complete";
+      return "✅ I Have Arrived at the Site";
     }
-    return "Arrived Site Gate Boundary";
+    return "📍 I Have Arrived at the Site";
   };
 
   // Get current position based on asset state
@@ -1537,8 +1537,8 @@ const saveTaskState = async (
 
     const getDispatcherButtonLabel = () => {
       if (currentAsset?.state === "INITIALIZED") return "🚀 Start Loading";
-      if (currentAsset?.state === "LOADING_INITIATED") return "✅ Complete Loading";
-      if (currentAsset?.state === "LOADING_COMPLETED") return "📦 Confirm Dispatch";
+      if (currentAsset?.state === "LOADING_INITIATED") return "✅ Loading Complete";
+      if (currentAsset?.state === "LOADING_COMPLETED") return "📦 Dispatch Truck";
       return "⏳ Waiting...";
     };
 
@@ -1662,7 +1662,7 @@ onClick={() => {
               }}
               className="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 py-1.5 rounded text-xs font-bold uppercase transition"
             >
-              ✔ Overturn & Re-Approve Factory Asset
+              ✔ Re-Approve Panel
             </button>
           </div>
         )}
@@ -1688,7 +1688,7 @@ onClick={() => {
               {/* Defect Selection */}
         <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg">
           <span className="block text-[8px] text-slate-400 uppercase font-bold mb-2">
-            Select Active Defect Vector (If Rejecting):
+            Reason for Rejection (If Any):
           </span>
           <div className="grid grid-cols-2 gap-2">
             {DEFECT_VECTORS.map((defect) => (
@@ -1733,7 +1733,7 @@ onClick={async () => {
     return;
   }
   
-  // Multi-stage: at "Complete Loading", check if there's a next stage
+  // Multi-stage: at "Loading Complete", check if there's a next stage
   if (currentStage < totalStages) {
     // Advance to next stage
     await saveTaskState(
@@ -1800,7 +1800,7 @@ onClick={async () => {
 disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(currentAsset?.state || "")}
             className="bg-red-950 hover:bg-red-900 text-red-400 border border-red-900/60 font-bold p-2 rounded text-xs uppercase tracking-wider transition disabled:opacity-30 disabled:pointer-events-none"
           >
-            Reject Focus Item
+            ❌ Reject Panel
           </button>
         </div>
       </div>
@@ -2122,7 +2122,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                       onChange={(e) => setSelectedDelayReason(e.target.value)}
                       className="w-full bg-slate-900 border border-slate-700 text-xs text-amber-500 p-1 rounded focus:outline-none"
                     >
-                      <option value="">-- No Delay Detected --</option>
+                      <option value="">-- No delay --</option>
                       {PRECAST_DELAY_REASONS.map((r) => (
                         <option key={r} value={r}>{r}</option>
                       ))}
@@ -2170,7 +2170,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                       disabled={!currentAsset?.state.startsWith("DISPATCHED") || !selectedDelayReason}
                       className="bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold px-4 rounded text-xs uppercase disabled:opacity-30 disabled:pointer-events-none transition"
                     >
-                      ⚠ Log Delay (+15m)
+                      ⚠ Report a Delay
                     </button>
                   </div>
                 </div>
@@ -2446,10 +2446,10 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
             }
           >
             {!scanned
-              ? "Verify Twin Life Cycle Assessment (LCA / EPD Compliance)"
+              ? "📄 Verify EPD Documents"
               : !hasEpd
-              ? "⚠️ Verify EPD — awaiting RAMCO"
-              : "Verify Twin Life Cycle Assessment (LCA / EPD Compliance)"}
+              ? "⚠️ Waiting for EPD documents"
+              : "📄 Verify EPD Documents"}
           </span>
         </label>
 
@@ -2472,10 +2472,10 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
             }
           >
             {!scanned
-              ? "Verify High-Performance Structural Mix Design Specs"
+              ? "📄 Verify Mix Design"
               : !hasMix
-              ? "⚠️ Verify Mix Design — awaiting RAMCO"
-              : "Verify High-Performance Structural Mix Design Specs"}
+              ? "⚠️ Waiting for mix design documents"
+              : "📄 Verify Mix Design"}
           </span>
         </label>
 
@@ -2500,7 +2500,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
             {!scanned
               ? "📋 Verify Delivery Note"
               : !hasDeliveryNote
-              ? "⚠️ Verify Delivery Note — awaiting RAMCO"
+              ? "⚠️ Waiting for delivery note"
               : "📋 Verify Delivery Note"}
           </span>
         </label>
@@ -2511,7 +2511,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
 
                   <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg">
                     <span className="block text-[8px] text-slate-400 uppercase font-bold mb-2">
-                      Select Structural Anomaly Core Reason:
+                      If rejecting, choose a reason:
                     </span>
                     <div className="grid grid-cols-2 gap-2">
                       {DEFECT_VECTORS.map((defect) => (
@@ -2570,7 +2570,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                           }}
                           className="col-span-2 bg-green-600 hover:bg-green-500 text-slate-950 font-bold p-2.5 rounded text-xs uppercase tracking-wider transition"
                         >
-                          📋 RECEIVED+APPROVED: {selectedInspectorDefect.toUpperCase()}
+✅ Received & Approved — {selectedInspectorDefect.toUpperCase()}
                         </button>
                       )}
                       {(currentAsset?.state.startsWith("RECEIVED_ON_SITE") ||
@@ -2600,10 +2600,10 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                           }
                           className="col-span-2 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold p-2.5 rounded text-xs uppercase tracking-wider transition disabled:opacity-30 disabled:pointer-events-none"
                         >
-                          {currentAsset?.state.startsWith("RECEIVED_ON_SITE") && "🔄 INITIATE OFFLOADING"}
-                          {currentAsset?.state === "GATE_IN_OFFLOADING" && "✅ COMPLETE OFFLOADING"}
-                          {currentAsset?.state === "OFFLOADING_COMPLETED" && "🏗️ INITIATE INSTALLATION"}
-                          {currentAsset?.state === "INSTALLATION_INITIATED" && "✅ COMPLETE INSTALLATION"}
+                          {currentAsset?.state.startsWith("RECEIVED_ON_SITE") && "🔄 Start Unloading"}
+                          {currentAsset?.state === "GATE_IN_OFFLOADING" && "✅ Unloading Complete"}
+                          {currentAsset?.state === "OFFLOADING_COMPLETED" && "🏗️ Start Installation"}
+                          {currentAsset?.state === "INSTALLATION_INITIATED" && "✅ Installation Complete"}
                         </button>
                       )}
                     </div>
@@ -2623,7 +2623,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                           }
                           className="bg-red-950 text-red-400 border border-red-900 font-bold p-2 rounded text-xs uppercase transition"
                         >
-                          Gate Reject
+                          ❌ Reject Panel at Gate
                         </button>
                       )}
                       {currentAsset?.state === "INSTALLATION_INITIATED" && (
@@ -2638,7 +2638,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                           }
                           className="bg-red-950 text-red-400 border border-red-900 font-bold p-2 rounded text-xs uppercase transition"
                         >
-                          Reject Element
+                          ❌ Reject Panel
                         </button>
                       )}
                     </div>
@@ -2706,7 +2706,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                     }
                     className="w-full bg-amber-600 text-slate-950 font-bold py-1 rounded text-xs uppercase transition"
                   >
-                    ⚠ Clear Rejection Lockout
+                    ↩️ Undo Rejection
                   </button>
                 </div>
               )}

@@ -9,7 +9,7 @@ import FleetRadar from "./FleetRadar";
 // Planner God-View — live table of all active trips.
 //
 // Columns:
-//   Trip Ref   |   Status   |   Delay Class
+//   Trip   |   Status   |   Delays
 // ============================================================
 
 type PlannerRow = {
@@ -267,9 +267,9 @@ export default function PlannerDashboard() {
         <table className="w-full text-xs">
           <thead>
             <tr className="border-b border-slate-800/60 text-[9px] uppercase tracking-wider text-slate-500 font-bold">
-              <th className="text-left px-4 py-2">Trip Ref</th>
+              <th className="text-left px-4 py-2">Trip</th>
               <th className="text-left px-4 py-2">Status</th>
-              <th className="text-left px-4 py-2">Delay Class</th>
+              <th className="text-left px-4 py-2">Delays</th>
             </tr>
           </thead>
           <tbody>
