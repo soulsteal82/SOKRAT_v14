@@ -659,7 +659,7 @@ function getAssetCustody(state: string | null | undefined, selectedTask?: any): 
       return `FACTORIES ${String.fromCharCode(64 + stage)} (${dispatcher})`;
       // Stage 1 → "FACTORIES A", Stage 2 → "FACTORIES B"
     }
-    return "FACTORIES (Dispatcher)";
+    return "FACTORY (Dispatcher)";
   }
   
   if (state.startsWith("DISPATCHED") || state === "ARRIVED_AT_GATE") {
@@ -1004,7 +1004,7 @@ const allowed = validTransitions[currentAsset?.state || ""] || [];
       }
 
       const getRejectionCustody = () => {
-        if (profile === "DISPATCHER") return "FACTORIES (Dispatcher)";
+        if (profile === "DISPATCHER") return "FACTORY (Dispatcher)";
         if (profile === "INSPECTOR") return "CONSTRUCTION SITE (Inspector)";
         return getAssetCustody(nextState);
       };
@@ -1140,13 +1140,28 @@ updatedFields.installation_completed_timestamp = new Date().toISOString();
       setAssets(prev => {
         const newAssets = prev.map(a => {
           const nextCustody = getAssetCustody(nextState);
+          const now = getFormattedTimestamp();
+
+          // If the FIRST custody entry is still the placeholder,
+          // replace it with the real timestamp now (this is the moment
+          // the panel enters the digital custody trail).
+          const cleanedHistory = a.custodyHistory.map((log, idx) => {
+            if (
+              idx === 0 &&
+              (log.timestamp === "[PENDING HARDWARE SCAN]" || !log.timestamp)
+            ) {
+              return { ...log, timestamp: now };
+            }
+            return log;
+          });
+
           const updated = {
             ...a,
             state: finalState,
             ...updatedFields,
             custodyHistory: [
-              ...a.custodyHistory,
-              { timestamp: getFormattedTimestamp(), state: finalState, custody: nextCustody }
+              ...cleanedHistory,
+              { timestamp: now, state: finalState, custody: nextCustody }
             ]
           };
           // Save this asset to Supabase
@@ -2195,12 +2210,19 @@ Reason for Delay
               ref={custodyLogRef}
               className="space-y-1 max-h-40 overflow-y-auto pr-1 font-mono text-[9px] text-slate-400 scrollbar-thin"
             >
-              {currentAsset?.custodyHistory?.map((log, i) => (
-                <div key={i} className="flex justify-between">
-                  <span>[{log.timestamp || "—"}] {log.state}</span>
-                  <span className="text-cyan-500">→ {log.custody}</span>
-                </div>
-              ))}
+                {currentAsset?.custodyHistory?.map((log, i) => {
+                const ts = log.timestamp;
+                const displayTs =
+                  !ts || ts === "[PENDING HARDWARE SCAN]"
+                    ? "NULL"
+                    : ts;
+                return (
+                  <div key={i} className="flex justify-between">
+                    <span>[{displayTs}] {log.state}</span>
+                    <span className="text-cyan-500">→ {log.custody}</span>
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
