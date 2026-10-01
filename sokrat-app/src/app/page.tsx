@@ -1865,10 +1865,9 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
 <img
   src="./Images/Logo.jpg"
   alt="S.O.K.R.A.T. Logo"
-  className="h-24 w-auto mb-2 object-contain"
+  className="h-36 w-auto mb-2 object-contain"
 />
-          <h1 className="text-xl font-black tracking-[0.25em] text-slate-100">S.O.K.R.A.T.</h1>
-          <p className="text-[9px] text-cyan-500 tracking-widest font-mono mt-0.5 uppercase">
+          <p className="text-[11px] text-cyan-500 tracking-widest font-mono mt-2 uppercase">
             Smart Operations & Kinetic Real-Time Asset Twin
           </p>
                     {typeof window !== "undefined" &&
@@ -2117,7 +2116,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                 <div className="space-y-2">
                   <div className="bg-slate-950 p-2 border border-slate-800 rounded-lg">
                     <span className="block text-[8px] text-slate-500 uppercase font-bold mb-1">
-                      Select Active Transit Highway Delay Reason:
+Reason for Delay
                     </span>
                     <select
                       value={selectedDelayReason}
@@ -2211,7 +2210,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
           <div className="bg-slate-950 border border-slate-800/80 p-2.5 rounded-lg space-y-1.5 animate-fade-in">
             <div className="flex items-center justify-between">
               <span className="text-[9px] uppercase font-bold text-slate-400 tracking-wider">
-                📦 Component Manifest Array ({assets.length} items)
+📦 Panels ({assets.length}) — tap to see individual panel status
               </span>
               <span className="text-[8px] text-cyan-400 font-mono">Live Sync Channel</span>
             </div>
@@ -2254,7 +2253,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
           <div className="grid grid-cols-2 gap-2 bg-slate-950/50 p-2.5 border border-slate-800 rounded-lg text-xs">
             <div>
               <span className="block text-[8px] text-slate-500 uppercase tracking-wider">
-                Asset serialization key:
+Panel ID
               </span>
               <span className="font-mono font-bold text-slate-300 truncate block">
                 {profile === "INSPECTOR" && !currentAsset?.hasScannedQR

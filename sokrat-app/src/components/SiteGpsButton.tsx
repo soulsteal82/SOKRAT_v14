@@ -140,14 +140,14 @@ export default function SiteGpsButton({
         disabled={busy}
         className="w-full bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold p-2 rounded text-xs uppercase transition disabled:opacity-50"
       >
-        {busy ? "⏳ Sending..." : "📍 Share Current Site GPS to Planning"}
+        {busy ? "⏳ Sending..." : "📍 Send My Location"}
       </button>
 
 <button
   onClick={() => setManual((v) => !v)}
   className="w-full text-xs text-slate-400 hover:text-cyan-400 underline"
 >
-  {manual ? "▲ hide manual entry" : "▼ or enter coordinates manually"}
+  {manual ? "▲ hide manual entry" : "▼ or enter your location manually"}
 </button>
 
       {manual && (
