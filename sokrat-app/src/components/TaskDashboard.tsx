@@ -539,12 +539,23 @@ useEffect(() => { expandedTaskIdRef.current = expandedTaskId; }, [expandedTaskId
    const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-      if (authLoading || !user) return;
+    // Wait for auth to fully resolve before setting up anything.
+    // If we return early while authLoading is true, we never get
+    // a second chance — the effect won't re-run until the deps change.
+    if (authLoading) return;
+    if (!user) {
+      console.log("[TaskDashboard] No user yet, waiting for auth");
+      return;
+    }
+
+    console.log("[TaskDashboard] Effect running — setting up Realtime + poll for", userName, userRole);
+
     const scheduleReload = () => {
-rtDebounceRef.current = setTimeout(() => {
-  console.log("[TaskDashboard] Realtime change → reloading tasks");
-  loadTasks();
-}, 150);
+      if (rtDebounceRef.current) clearTimeout(rtDebounceRef.current);
+      rtDebounceRef.current = setTimeout(() => {
+        console.log("[TaskDashboard] Realtime change → reloading tasks");
+        loadTasks();
+      }, 150);
     };
 
     const channel = supabase
@@ -584,7 +595,7 @@ rtDebounceRef.current = setTimeout(() => {
         pollIntervalRef.current = null;
       }
     };
-  }, [userName, userRole]);
+  }, [userName, userRole, authLoading, user]);
 
   if (loading) {
     return (
