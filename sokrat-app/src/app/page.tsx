@@ -2200,7 +2200,7 @@ Reason for Delay
           <div className="bg-cyan-950/10 border border-cyan-900/20 p-2.5 rounded-lg text-xs space-y-1">
             <div className="flex justify-between items-center border-b border-slate-800/40 pb-1">
               <span className="text-slate-400 font-bold uppercase text-[9px] tracking-wider">
-                📍 Verification Custody Stamp:
+📍 Custody Log
               </span>
               <span className="text-cyan-400 font-bold uppercase bg-slate-950 px-2 py-0.5 rounded border border-cyan-800 text-[9px]">
 {getAssetCustody(currentAsset?.state, selectedTask)}
@@ -2213,9 +2213,9 @@ Reason for Delay
                 {currentAsset?.custodyHistory?.map((log, i) => {
                 const ts = log.timestamp;
                 const displayTs =
-                  !ts || ts === "[PENDING HARDWARE SCAN]"
-                    ? "NULL"
-                    : ts;
+                  ts && ts.trim() !== "" && ts !== "[PENDING HARDWARE SCAN]"
+                    ? ts
+                    : "—";
                 return (
                   <div key={i} className="flex justify-between">
                     <span>[{displayTs}] {log.state}</span>
