@@ -2302,7 +2302,7 @@ Panel ID
 {profile !== "DRIVER" && manifest.scope !== "FACTORY_ONLY" && selectedTask && (
           <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg text-[11px] space-y-1.5">
             <div className="flex justify-between text-slate-400">
-              <span>Manifest Group Reference Link:</span>
+              <span>Trip ID</span>
               <span className="font-mono text-cyan-400 font-bold bg-slate-900 px-1 rounded border border-slate-800">
                 {manifest.manifest_group_id}
               </span>
