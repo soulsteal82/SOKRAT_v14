@@ -119,15 +119,27 @@ export function startDriverGpsBroadcast(
       },
       (err) => {
         console.warn("[driverGps] real GPS error:", err.message);
-        console.warn("[driverGps] falling back to DEMO synthetic sweep");
-        if (!demoStop) demoStop = startDemoLoop();
+        const isDemoMode =
+          typeof window !== "undefined" &&
+          window.location.search.includes("demo=1");
+        if (isDemoMode) {
+          console.warn("[driverGps] falling back to DEMO synthetic sweep (demo mode active)");
+          if (!demoStop) demoStop = startDemoLoop();
+        } else {
+          console.warn("[driverGps] not in demo mode — driver GPS will remain null");
+        }
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 20000 }
     );
 
-    // If we haven't received a real GPS update within 5 seconds,
-    // fall back to demo mode (covers permission-denied, timeouts, etc.)
+    // Fallback demo mode is ONLY enabled with ?demo=1 in the URL.
+    // This prevents fabricated positions during real pilots.
+    const isDemoMode =
+      typeof window !== "undefined" &&
+      window.location.search.includes("demo=1");
+
     const fallbackTimer = setTimeout(() => {
+      if (!isDemoMode) return;
       if (!stopped && realLastPush === 0 && !demoStop) {
         console.log("[driverGps] no real GPS received in 5s — starting demo fallback");
         demoStop = startDemoLoop();
