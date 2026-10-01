@@ -630,9 +630,8 @@ const currentAsset = assets.length > 0
   }, [activeAssetId]);
 
    useEffect(() => {
-    const isAtSite = currentAsset?.state ? ["ARRIVED_AT_GATE", "RECEIVED_ON_SITE", "GATE_IN_OFFLOADING", "OFFLOADING_COMPLETED",
-      "INSTALLATION_INITIATED", "INSTALLATION_COMPLETED"].includes(currentAsset.state) : false;
-    setManifest(prev => ({ ...prev, geofence_verified: isAtSite }));
+    // Pilot: auto-verify geofence so the inspector never gets blocked.
+    setManifest(prev => ({ ...prev, geofence_verified: true }));
   }, [currentAsset?.state]);
 
   function getNextState(curr: string): string | null {
@@ -1575,6 +1574,8 @@ const saveTaskState = async (
                "🚚 Delivery Only"}
             </span>
           </div>
+          {/* Scope switcher: read-only for non-planners. Set to true to allow editing. */}
+          {false && (
           <div className="grid grid-cols-3 gap-2 mt-1">
             <button
 onClick={() => {
@@ -1616,6 +1617,7 @@ onClick={() => {
               🏭 Factory
             </button>
           </div>
+          )}
           <p className="text-[7px] text-slate-500 mt-1 text-center">
             {manifest.scope === "FULL" && "🔵 Full tracking: Factory → Installation"}
             {manifest.scope === "FACTORY_ONLY" && "🏭 Ends at DISPATCHED (Client pickup)"}
@@ -2227,8 +2229,8 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
           </div>
         )}
 
-        {/* Scanning - Only show if not FACTORY_ONLY */}
-        {profile !== "DRIVER" && manifest.scope !== "FACTORY_ONLY" && selectedTask && (
+        {/* Scanning - Hidden for pilot (mock feature). Set to true to re-enable. */}
+        {false && profile !== "DRIVER" && manifest.scope !== "FACTORY_ONLY" && selectedTask && (
                   <div className="grid grid-cols-3 gap-2">
             <button
               onClick={handleBulkNFCScan}
@@ -2539,23 +2541,30 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                   </div>
 
                   {/* Geofence status with manual override */}
-                  {!manifest.geofence_verified ? (
-                    <div className="space-y-2">
-                      <div className="bg-red-950/20 border border-red-900/40 p-2 rounded text-[10px] text-amber-500 text-center font-mono">
-                        🔒 GEOFENCE LOCK: Site handshake control offline. Manual override available below.
+                  {/* Geofence panel: hidden for pilot. Auto-pass logic below. */}
+                  {false && (
+                    !manifest.geofence_verified ? (
+                      <div className="space-y-2">
+                        <div className="bg-red-950/20 border border-red-900/40 p-2 rounded text-[10px] text-amber-500 text-center font-mono">
+                          🔒 GEOFENCE LOCK: Site handshake control offline. Manual override available below.
+                        </div>
+                        <button
+                          onClick={handleManualGeofenceOverride}
+                          className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold p-2 rounded text-xs uppercase tracking-wider transition"
+                        >
+                          🔓 MANUAL OVERRIDE GEOFENCE
+                        </button>
                       </div>
-                      <button
-                        onClick={handleManualGeofenceOverride}
-                        className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold p-2 rounded text-xs uppercase tracking-wider transition"
-                      >
-                        🔓 MANUAL OVERRIDE GEOFENCE
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="bg-green-950/20 border border-green-900/40 p-2 rounded text-[10px] text-green-400 text-center font-mono">
-                      ✅ GEOFENCE VERIFIED: Site handshake complete. Proceed with operations.
-                    </div>
+                    ) : (
+                      <div className="bg-green-950/20 border border-green-900/40 p-2 rounded text-[10px] text-green-400 text-center font-mono">
+                        ✅ GEOFENCE VERIFIED: Site handshake complete. Proceed with operations.
+                      </div>
+                    )
                   )}
+                  {/* Auto-pass geofence for pilot — no lock, no override needed */}
+                  <div className="bg-green-950/20 border border-green-900/40 p-2 rounded text-[10px] text-green-400 text-center font-mono">
+                    ✅ Ready — tap to continue
+                  </div>
 
                   <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2">

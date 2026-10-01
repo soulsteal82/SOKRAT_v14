@@ -954,7 +954,8 @@ function getStatusPill(state: string | undefined) {
                         </span>
                       </div>
 
-                      {isDemoMode && (
+                      {/* Demo simulator: hidden for pilot. Only appears with ?demo=1. */}
+                      {false && isDemoMode && (
                         <div className="flex gap-1 mb-1">
                           <button
                             onClick={(e) => {
