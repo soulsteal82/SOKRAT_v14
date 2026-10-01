@@ -16,6 +16,10 @@ const Marker = dynamic(
   () => import("react-leaflet").then((m) => m.Marker),
   { ssr: false }
 );
+const Polyline = dynamic(
+  () => import("react-leaflet").then((m) => m.Polyline),
+  { ssr: false }
+);
 const Popup = dynamic(
   () => import("react-leaflet").then((m) => m.Popup),
   { ssr: false }
@@ -340,7 +344,21 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
       iconAnchor: [15, 15],
     });
 
-  const allPoints: [number, number][] = vehicles.map((v) => [v.driver_lat, v.driver_lng]);
+  // ---- Build site (destination) icon ----
+  const buildSiteIcon = () =>
+    L?.divIcon({
+      className: "fleet-radar-site-marker",
+      html: `<div style="background:#ef4444;width:24px;height:24px;border-radius:50%;border:3px solid white;box-shadow:0 0 12px rgba(239,68,68,0.95), 0 0 4px rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;font-size:12px;">🏗️</div>`,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+
+  const allPoints: [number, number][] = [
+    ...vehicles.map((v) => [v.driver_lat, v.driver_lng] as [number, number]),
+    ...vehicles
+      .filter((v) => v.site_lat != null && v.site_lng != null)
+      .map((v) => [v.site_lat!, v.site_lng!] as [number, number]),
+  ];
 
   return (
     <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col isolate">
@@ -405,6 +423,67 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
               attribution='&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
               url={`https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png?api_key=${process.env.NEXT_PUBLIC_STADIA_API_KEY || ""}`}
             />
+
+            {/* Site markers — one red pin per trip's destination */}
+            {vehicles.map((v) => {
+              if (v.site_lat == null || v.site_lng == null) return null;
+              const siteIcon = buildSiteIcon();
+              return (
+                <Marker
+                  key={`site-${v.manifest_group_id}`}
+                  position={[v.site_lat, v.site_lng]}
+                  icon={siteIcon}
+                >
+                  <Popup>
+                    <div className="text-xs space-y-1 min-w-[200px]">
+                      <div className="font-black text-sm text-slate-900 border-b border-slate-300 pb-1 mb-1">
+                        🏗️ Destination
+                      </div>
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-500">Trip:</span>
+                        <span className="font-mono font-bold text-slate-900 text-[10px]">
+                          {v.manifest_group_id}
+                        </span>
+                      </div>
+                      {v.site_name && (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-slate-500">Site:</span>
+                          <span className="font-bold text-slate-900 text-right max-w-[140px]">
+                            {v.site_name}
+                          </span>
+                        </div>
+                      )}
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-500">Coordinates:</span>
+                        <span className="font-mono text-[10px] text-slate-700">
+                          {v.site_lat.toFixed(4)}, {v.site_lng.toFixed(4)}
+                        </span>
+                      </div>
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
+
+            {/* Route lines — dotted line from each truck to its destination */}
+            {vehicles.map((v) => {
+              if (v.site_lat == null || v.site_lng == null) return null;
+              return (
+                <Polyline
+                  key={`route-${v.manifest_group_id}`}
+                  positions={[
+                    [v.driver_lat, v.driver_lng],
+                    [v.site_lat, v.site_lng],
+                  ]}
+                  pathOptions={{
+                    color: "#06b6d4",
+                    weight: 2,
+                    opacity: 0.55,
+                    dashArray: "6 8",
+                  }}
+                />
+              );
+            })}
 
             {vehicles.map((v) => {
               const color = getStatusColor(v.current_state, v.driver_status);
