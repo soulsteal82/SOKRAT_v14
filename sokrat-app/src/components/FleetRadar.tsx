@@ -193,7 +193,7 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
     const { data: manifests } = await supabase
       .from("manifests")
       .select(
-        "manifest_group_id, driver_name, priority, driver_current_lat, driver_current_lng, driver_status, driver_last_update, vehicle_plate, vehicle_trailer_type, vehicle_ownership, selected_scope, site_name, site_latitude, site_longitude"
+        "manifest_group_id, driver_name, priority, driver_current_lat, driver_current_lng, driver_status, driver_last_update, vehicle_plate, vehicle_trailer_type, vehicle_ownership, selected_scope, site_name, site_latitude, site_longitude, factories"
       );
 
     if (!manifests) return;
@@ -234,33 +234,54 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
       }
     });
 
-    // Keep only manifests with valid driver GPS
+    // Include ALL manifests. If the driver's GPS is missing, use the
+    // first factory's coordinates so parked trucks still appear on the map.
     const vlist: Vehicle[] = manifests
-      .filter(
-        (m) =>
+      .map((m) => {
+        // Parse factories JSON for fallback position
+        let fallbackLat: number | null = null;
+        let fallbackLng: number | null = null;
+        try {
+          const factories = typeof m.factories === "string"
+            ? JSON.parse(m.factories)
+            : m.factories;
+          if (Array.isArray(factories) && factories.length > 0) {
+            fallbackLat = factories[0]?.lat ?? null;
+            fallbackLng = factories[0]?.lng ?? null;
+          }
+        } catch {}
+
+        const hasLiveGps =
           m.driver_current_lat != null &&
           m.driver_current_lng != null &&
           !isNaN(m.driver_current_lat) &&
-          !isNaN(m.driver_current_lng)
-      )
-      .map((m) => ({
-        manifest_group_id: m.manifest_group_id,
-        driver_name: m.driver_name,
-        priority: m.priority,
-        driver_lat: m.driver_current_lat,
-        driver_lng: m.driver_current_lng,
-        driver_status: m.driver_status,
-        driver_last_update: m.driver_last_update,
-        current_state: currentStateByManifest[m.manifest_group_id] || "INITIALIZED",
-        vehicle_plate: m.vehicle_plate,
-        vehicle_trailer_type: m.vehicle_trailer_type,
-        vehicle_ownership: m.vehicle_ownership,
-        selected_scope: m.selected_scope,
-        site_name: m.site_name,
-        site_lat: m.site_latitude,
-        site_lng: m.site_longitude,
-        panels_count: panelCountByManifest[m.manifest_group_id] || 0,
-      }));
+          !isNaN(m.driver_current_lng);
+
+        const lat = hasLiveGps ? m.driver_current_lat : fallbackLat;
+        const lng = hasLiveGps ? m.driver_current_lng : fallbackLng;
+
+        if (lat == null || lng == null) return null;
+
+        return {
+          manifest_group_id: m.manifest_group_id,
+          driver_name: m.driver_name,
+          priority: m.priority,
+          driver_lat: lat,
+          driver_lng: lng,
+          driver_status: m.driver_status,
+          driver_last_update: m.driver_last_update,
+          current_state: currentStateByManifest[m.manifest_group_id] || "INITIALIZED",
+          vehicle_plate: m.vehicle_plate,
+          vehicle_trailer_type: m.vehicle_trailer_type,
+          vehicle_ownership: m.vehicle_ownership,
+          selected_scope: m.selected_scope,
+          site_name: m.site_name,
+          site_lat: m.site_latitude,
+          site_lng: m.site_longitude,
+          panels_count: panelCountByManifest[m.manifest_group_id] || 0,
+        } as Vehicle;
+      })
+      .filter((v): v is Vehicle => v !== null);
 
     setVehicles(vlist);
     setLoading(false);
