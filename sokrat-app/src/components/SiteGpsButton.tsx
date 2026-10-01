@@ -171,7 +171,7 @@ export default function SiteGpsButton({
             disabled={busy}
             className="col-span-2 bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold p-3 rounded text-base uppercase transition"
           >
-            💾 Save Manual Coordinates
+📍 Share Manual Location
           </button>
         </div>
       )}
