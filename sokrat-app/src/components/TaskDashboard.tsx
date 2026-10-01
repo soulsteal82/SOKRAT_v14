@@ -217,6 +217,7 @@ export default function TaskDashboard({
   const { user, loading: authLoading } = useAuth();
   const [tasks, setTasks] = useState<UserTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshingId, setRefreshingId] = useState<string | null>(null);
 const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 const expandedTaskIdRef = useRef<string | null>(null);
 useEffect(() => { expandedTaskIdRef.current = expandedTaskId; }, [expandedTaskId]);
@@ -325,6 +326,20 @@ useEffect(() => { expandedTaskIdRef.current = expandedTaskId; }, [expandedTaskId
     simCancelRef.current = null;
     setSimRunning(false);
     setSimPos(null);
+  };
+
+  const handleRefreshTask = async (taskId: string, manifestId: string) => {
+    setRefreshingId(taskId);
+    try {
+      await loadTasks();
+      // Also re-emit for the parent, so it refreshes its own view
+      const fresh = tasks.find((t) => t.id === taskId);
+      if (fresh && onSelectTask && expandedTaskId === taskId) {
+        onSelectTask(fresh);
+      }
+    } finally {
+      setTimeout(() => setRefreshingId(null), 500);
+    }
   };
 
   const loadTasks = async (attempt = 1) => {
@@ -739,6 +754,21 @@ function getStatusPill(state: string | undefined) {
                     >
                       {task.priority}
                     </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRefreshTask(task.id, task.manifest_group_id);
+                      }}
+                      disabled={refreshingId === task.id}
+                      title="Refresh this task"
+                      className={`text-[10px] px-2 py-0.5 rounded font-bold border transition ${
+                        refreshingId === task.id
+                          ? "bg-cyan-950/60 text-cyan-400 border-cyan-800 animate-pulse"
+                          : "bg-slate-800 text-slate-400 border-slate-700 hover:bg-slate-700 hover:text-cyan-400"
+                      }`}
+                    >
+                      {refreshingId === task.id ? "⟳" : "🔄"}
+                    </button>
                   </div>
                 </div>
 
