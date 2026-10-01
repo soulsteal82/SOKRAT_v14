@@ -66,14 +66,46 @@ export default function NavigationPanel({
       : Infinity;
   const driverIsNearby = distanceToSiteM <= NEARBY_THRESHOLD_M;
 
+  // Re-fetch the route only when the driver has moved a meaningful
+  // distance from where the last route was computed. This prevents
+  // the ETA from blinking every few seconds due to GPS jitter.
+  const lastRouteOriginRef = React.useRef<[number, number] | null>(null);
+  const lastSiteRef = React.useRef<[number, number] | null>(null);
+  const MIN_REFETCH_DISTANCE_M = 500;
+
   useEffect(() => {
     if (!isActive || !driverLat || !driverLng || !siteLat || !siteLng) {
       setRoute(null);
       setTraffic([]);
+      lastRouteOriginRef.current = null;
+      lastSiteRef.current = null;
       return;
     }
+
+    // If site coordinates changed, force a refetch regardless of driver movement
+    const siteChanged =
+      !lastSiteRef.current ||
+      Math.abs(lastSiteRef.current[0] - siteLat) > 0.0001 ||
+      Math.abs(lastSiteRef.current[1] - siteLng) > 0.0001;
+
+    // If we already have a route and the driver hasn't moved enough,
+    // don't re-fetch — keep the existing route stable.
+    if (!siteChanged && lastRouteOriginRef.current && route) {
+      const dLat = Math.abs(driverLat - lastRouteOriginRef.current[0]);
+      const dLng = Math.abs(driverLng - lastRouteOriginRef.current[1]);
+      const cosLat = Math.cos((driverLat * Math.PI) / 180);
+      const meters = Math.sqrt(
+        (dLat * 111_000) ** 2 + (dLng * 111_000 * cosLat) ** 2
+      );
+      if (meters < MIN_REFETCH_DISTANCE_M) {
+        return;
+      }
+    }
+
     let cancelled = false;
     setLoading(true);
+    lastRouteOriginRef.current = [driverLat, driverLng];
+    lastSiteRef.current = [siteLat, siteLng];
 
     fetchRoute([driverLat, driverLng], [siteLat, siteLng])
       .then((r) => {
@@ -88,7 +120,7 @@ export default function NavigationPanel({
     return () => {
       cancelled = true;
     };
-  }, [isActive, driverLat, driverLng, siteLat, siteLng]);
+  }, [isActive, driverLat, driverLng, siteLat, siteLng, route]);
 
   if (!isActive) return null;
 

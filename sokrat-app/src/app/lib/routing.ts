@@ -157,10 +157,14 @@ export function simulateTraffic(route: RouteResult): TrafficSegment[] {
   if (total < 4) return [];
 
   const third = Math.floor(total / 3);
-  const baseMinutes = route.durationSeconds / 60;
 
-  // Deterministic seed so it doesn't flicker on re-render
-  const seed = Math.floor(baseMinutes) % 3;
+  // Seed from the DESTINATION coordinates, not the duration.
+  // Duration varies slightly between OSRM refetches (GPS jitter changes
+  // the origin point). The destination is stable across refetches for
+  // the same trip, so this keeps traffic tiers consistent — no blinking.
+  const dest = route.coordinates[route.coordinates.length - 1];
+  const seed =
+    (Math.floor(dest[0] * 1000) + Math.floor(dest[1] * 1000)) % 3;
   const tiers: Array<"CLEAR" | "MODERATE" | "HEAVY"> = [
     "CLEAR",
     "MODERATE",
