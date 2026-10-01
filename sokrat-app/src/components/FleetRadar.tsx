@@ -260,8 +260,10 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
         const lat = hasLiveGps ? m.driver_current_lat : fallbackLat;
         const lng = hasLiveGps ? m.driver_current_lng : fallbackLng;
 
-        if (lat == null || lng == null) return null;
-
+        if (lat == null || lng == null) {
+          console.warn("[FleetRadar] dropping manifest", m.manifest_group_id, "— lat:", lat, "lng:", lng, "driverGPS:", hasLiveGps, "factory:", fallbackLat, fallbackLng);
+          return null;
+        }
         return {
           manifest_group_id: m.manifest_group_id,
           driver_name: m.driver_name,
