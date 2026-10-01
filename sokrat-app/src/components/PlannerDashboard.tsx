@@ -73,7 +73,38 @@ export default function PlannerDashboard() {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [radarOpen, setRadarOpen] = useState(false);
-    const [, setTick] = useState(0);
+  const [, setTick] = useState(0);
+
+  // NEW: expanded trip + custody log
+  const [expandedTripId, setExpandedTripId] = useState<string | null>(null);
+  const [custodyByTrip, setCustodyByTrip] = useState<
+    Record<string, { asset_serial: string; state: string; custody_history: any[] }[]>
+  >({});
+  const [custodyLoading, setCustodyLoading] = useState<string | null>(null);
+
+  const loadCustodyForTrip = async (manifestGroupId: string) => {
+    setCustodyLoading(manifestGroupId);
+    const { data } = await supabase
+      .from("assets")
+      .select("asset_serial, state, custody_history")
+      .eq("manifest_group_id", manifestGroupId)
+      .order("asset_serial", { ascending: true });
+
+    if (data) {
+      setCustodyByTrip((prev) => ({ ...prev, [manifestGroupId]: data }));
+    }
+    setCustodyLoading(null);
+  };
+
+  const handleToggleTrip = async (manifestGroupId: string) => {
+    if (expandedTripId === manifestGroupId) {
+      setExpandedTripId(null);
+      return;
+    }
+    setExpandedTripId(manifestGroupId);
+    // Fetch fresh custody for the trip
+    await loadCustodyForTrip(manifestGroupId);
+  };
   const loadRows = async () => {
     // 1. Fetch every manifest
     const { data: manifests, error } = await supabase
@@ -273,35 +304,116 @@ export default function PlannerDashboard() {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr
-                key={r.manifest_group_id}
-                className="border-b border-slate-900 hover:bg-slate-900/40 transition"
-              >
-                <td className="px-4 py-2.5 font-mono text-slate-200 text-[10px]">
-                  {r.manifest_group_id}
-                </td>
-                <td className="px-4 py-2.5">
-                  <span
-                    className={`inline-block text-[9px] px-2 py-1 rounded font-bold border ${r.status_color}`}
+            {rows.map((r) => {
+              const isExpanded = expandedTripId === r.manifest_group_id;
+              const custody = custodyByTrip[r.manifest_group_id] || [];
+              const isLoading = custodyLoading === r.manifest_group_id;
+
+              return (
+                <React.Fragment key={r.manifest_group_id}>
+                  <tr
+                    onClick={() => handleToggleTrip(r.manifest_group_id)}
+                    className="border-b border-slate-900 hover:bg-slate-900/60 transition cursor-pointer"
                   >
-                    {r.status_label}
-                  </span>
-                </td>
-                <td className="px-4 py-2.5">
-                  <span
-                    className={`inline-block text-[9px] px-2 py-1 rounded font-bold border border-slate-800 ${r.delay_color}`}
-                  >
-                    {r.delay_label}
-                  </span>
-                  {r.total_delay_minutes > 0 && (
-                    <span className="text-[8px] text-slate-500 font-mono ml-2">
-                      ({r.total_delay_minutes}m)
-                    </span>
+                    <td className="px-4 py-2.5 font-mono text-slate-200 text-[10px]">
+                      <span className="inline-flex items-center gap-2">
+                        <span className="text-cyan-500 text-[10px]">
+                          {isExpanded ? "▼" : "▶"}
+                        </span>
+                        {r.manifest_group_id}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span
+                        className={`inline-block text-[9px] px-2 py-1 rounded font-bold border ${r.status_color}`}
+                      >
+                        {r.status_label}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span
+                        className={`inline-block text-[9px] px-2 py-1 rounded font-bold border border-slate-800 ${r.delay_color}`}
+                      >
+                        {r.delay_label}
+                      </span>
+                      {r.total_delay_minutes > 0 && (
+                        <span className="text-[8px] text-slate-500 font-mono ml-2">
+                          ({r.total_delay_minutes}m)
+                        </span>
+                      )}
+                    </td>
+                  </tr>
+
+                  {isExpanded && (
+                    <tr className="border-b border-slate-900 bg-slate-950/60">
+                      <td colSpan={3} className="px-4 py-3">
+                        <div className="space-y-2">
+                          <div className="text-[9px] uppercase font-bold text-purple-300 tracking-widest">
+                            Custody Log · {custody.length} panel{custody.length === 1 ? "" : "s"}
+                          </div>
+
+                          {isLoading && (
+                            <div className="text-[10px] text-slate-500 italic">
+                              Loading custody history…
+                            </div>
+                          )}
+
+                          {!isLoading && custody.length === 0 && (
+                            <div className="text-[10px] text-slate-500 italic">
+                              No panels yet.
+                            </div>
+                          )}
+
+                          {!isLoading &&
+                            custody.map((panel) => (
+                              <div
+                                key={panel.asset_serial}
+                                className="bg-slate-900/60 border border-slate-800 rounded p-2"
+                              >
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-[10px] font-mono text-slate-200">
+                                    {panel.asset_serial}
+                                  </span>
+                                  <span className="text-[9px] px-2 py-0.5 rounded font-bold bg-cyan-950/50 text-cyan-400 border border-cyan-900/60">
+                                    {panel.state}
+                                  </span>
+                                </div>
+
+                                <div className="space-y-0.5 font-mono text-[9px] text-slate-400">
+                                  {(panel.custody_history || []).map(
+                                    (log: any, i: number) => {
+                                      const ts = log.timestamp;
+                                      const displayTs =
+                                        ts &&
+                                        ts.trim() !== "" &&
+                                        ts !== "[PENDING HARDWARE SCAN]"
+                                          ? ts
+                                          : "—";
+                                      return (
+                                        <div
+                                          key={i}
+                                          className="flex justify-between gap-3"
+                                        >
+                                          <span className="truncate">
+                                            [{displayTs}] {log.state}
+                                          </span>
+                                          <span className="text-cyan-500 shrink-0">
+                                            → {log.custody}
+                                          </span>
+                                        </div>
+                                      );
+                                    }
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                        </div>
+                      </td>
+                    </tr>
                   )}
-                </td>
-              </tr>
-            ))}
+                </React.Fragment>
+              );
+            })}
           </tbody>
         </table>
 
