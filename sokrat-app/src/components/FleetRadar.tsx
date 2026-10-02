@@ -713,6 +713,13 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
                         </span>
                       </div>
 
+                      <div className="flex justify-between gap-3">
+                        <span className="text-slate-500">State:</span>
+                        <span className="font-mono text-[9px] text-slate-800 font-bold">
+                          {v.current_state || "—"}
+                        </span>
+                      </div>
+
                       <div className="flex justify-between gap-3 border-t border-slate-200 pt-1 mt-1">
                         <span className="text-slate-500">ETA:</span>
                         <span className="font-bold text-slate-900">
