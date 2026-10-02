@@ -105,6 +105,17 @@ export default function PlannerDashboard() {
     // Fetch fresh custody for the trip
     await loadCustodyForTrip(manifestGroupId);
   };
+
+  // Auto-refresh the expanded trip's custody log every 5 seconds.
+  // This keeps the planner's view in sync with the workers' actions.
+  useEffect(() => {
+    if (!expandedTripId) return;
+    const id = setInterval(() => {
+      loadCustodyForTrip(expandedTripId);
+    }, 5000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedTripId]);
   const loadRows = async () => {
     // 1. Fetch every manifest
     const { data: manifests, error } = await supabase
