@@ -171,6 +171,7 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
   const [loading, setLoading] = useState(true);
   const channelRef = useRef<RealtimeChannel | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [popupRefreshKey, setPopupRefreshKey] = useState(0);
 
   // Route cache — keyed by manifest ID. Stores the last OSRM route
   // and the driver position it was computed from, so we don't refetch
@@ -309,6 +310,8 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
 
     setVehicles(vlist);
     setLoading(false);
+    // Force any open popup to re-render with fresh data
+    setPopupRefreshKey((k) => k + 1);
   };
 
   useEffect(() => {
@@ -651,7 +654,7 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
                   }
                   icon={icon}
                 >
-                  <Popup>
+                  <Popup key={`popup-${v.manifest_group_id}-${popupRefreshKey}`}>
                     <div className="text-xs space-y-1 min-w-[200px]">
                       <div className="font-black text-sm text-slate-900 border-b border-slate-300 pb-1 mb-1">
                         🚚 {v.manifest_group_id}
