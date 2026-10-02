@@ -349,7 +349,7 @@ export default function PlannerDashboard() {
                       <td colSpan={3} className="px-4 py-3">
                         <div className="space-y-2">
                           <div className="text-[9px] uppercase font-bold text-purple-300 tracking-widest">
-                            Custody Log · {custody.length} panel{custody.length === 1 ? "" : "s"}
+                            Custody Log
                           </div>
 
                           {isLoading && (
@@ -364,23 +364,42 @@ export default function PlannerDashboard() {
                             </div>
                           )}
 
-                          {!isLoading &&
-                            custody.map((panel) => (
-                              <div
-                                key={panel.asset_serial}
-                                className="bg-slate-900/60 border border-slate-800 rounded p-2"
-                              >
+                          {!isLoading && custody.length > 0 && (() => {
+                            // Pick the "least advanced" panel — same rule the
+                            // worker view uses to determine the trip's current
+                            // custody stamp.
+                            const stateRank = (s: string): number => {
+                              if (!s) return 0;
+                              if (s.startsWith("REJECTED")) return -1;
+                              if (s === "INITIALIZED") return 0;
+                              if (s === "LOADING_INITIATED") return 1;
+                              if (s === "LOADING_COMPLETED") return 2;
+                              if (s.startsWith("DISPATCHED")) return 3;
+                              if (s === "ARRIVED_AT_GATE") return 4;
+                              if (s.startsWith("RECEIVED_ON_SITE")) return 5;
+                              if (s === "GATE_IN_OFFLOADING") return 6;
+                              if (s === "OFFLOADING_COMPLETED") return 7;
+                              if (s === "INSTALLATION_INITIATED") return 8;
+                              if (s === "INSTALLATION_COMPLETED") return 9;
+                              return 0;
+                            };
+                            const focusPanel = [...custody].sort(
+                              (a, b) => stateRank(a.state) - stateRank(b.state)
+                            )[0];
+
+                            return (
+                              <div className="bg-slate-900/60 border border-slate-800 rounded p-2">
                                 <div className="flex items-center justify-between mb-1">
                                   <span className="text-[10px] font-mono text-slate-200">
-                                    {panel.asset_serial}
+                                    {focusPanel.asset_serial}
                                   </span>
                                   <span className="text-[9px] px-2 py-0.5 rounded font-bold bg-cyan-950/50 text-cyan-400 border border-cyan-900/60">
-                                    {panel.state}
+                                    {focusPanel.state}
                                   </span>
                                 </div>
 
                                 <div className="space-y-0.5 font-mono text-[9px] text-slate-400">
-                                  {(panel.custody_history || []).map(
+                                  {(focusPanel.custody_history || []).map(
                                     (log: any, i: number) => {
                                       const ts = log.timestamp;
                                       const displayTs =
@@ -406,7 +425,8 @@ export default function PlannerDashboard() {
                                   )}
                                 </div>
                               </div>
-                            ))}
+                            );
+                          })()}
                         </div>
                       </td>
                     </tr>
