@@ -74,7 +74,7 @@ export type SelectedTaskData = {
   delivery_note_file_name?: string | null;
 };
 
-type UserTask = SelectedTaskData & {
+export type UserTask = SelectedTaskData & {
   id: string;
   user_name: string;
   user_role: string;
@@ -82,6 +82,7 @@ type UserTask = SelectedTaskData & {
   current_stage?: number | null;
   asset_count?: number;
   current_state?: string;
+  transit_delay_minutes?: number;
 };
 
 type Props = {
@@ -373,11 +374,12 @@ useEffect(() => { expandedTaskIdRef.current = expandedTaskId; }, [expandedTaskId
     // Count actual assets per manifest + track current state
     const { data: assetCounts } = await supabase
       .from("assets")
-      .select("manifest_group_id, state")
+      .select("manifest_group_id, state, transit_delay_minutes")
       .in("manifest_group_id", manifestIds);
 
     const assetCountByManifest: Record<string, number> = {};
     const currentStateByManifest: Record<string, string> = {};
+    const transitDelayByManifest: Record<string, number> = {};
 
     // Rank order — lower = less advanced. We pick the *least advanced*
     // state so that if ANY panel is still at the factory, the whole trip
@@ -405,6 +407,9 @@ useEffect(() => { expandedTaskIdRef.current = expandedTaskId; }, [expandedTaskId
       if (prev === undefined || stateRank(row.state) < stateRank(prev)) {
         currentStateByManifest[id] = row.state;
       }
+      const priorDelay = transitDelayByManifest[id] || 0;
+      const rowDelay = row.transit_delay_minutes || 0;
+      if (rowDelay > priorDelay) transitDelayByManifest[id] = rowDelay;
     });
 
     const driverNames = [
@@ -431,6 +436,7 @@ useEffect(() => { expandedTaskIdRef.current = expandedTaskId; }, [expandedTaskId
           current_stage: manifest?.current_stage,
           asset_count: assetCountByManifest[task.manifest_group_id] || 0,
           current_state: currentStateByManifest[task.manifest_group_id] || "INITIALIZED",
+          transit_delay_minutes: transitDelayByManifest[task.manifest_group_id] || 0,
           driver_name: manifest?.driver_name,
         driver_phone: manifest?.driver_phone,
         driver_rating:
@@ -1030,7 +1036,10 @@ function getStatusPill(state: string | undefined) {
                               siteLng={task.site_longitude}
                               siteName={task.site_name || "Site"}
                               isActive={true}
-                                                            compact={true}
+                              compact={true}
+                              transitDelayMinutes={
+                                task.transit_delay_minutes || 0
+                              }
                             />
                           )}
                       </div>

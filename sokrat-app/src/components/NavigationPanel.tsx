@@ -40,9 +40,9 @@ type Props = {
   isActive: boolean;
   onOpenFullScreen?: () => void;
   compact?: boolean;
-    hideLauncher?: boolean;
+  hideLauncher?: boolean;
+  transitDelayMinutes?: number;
 };
-
 export default function NavigationPanel({
   driverLat,
   driverLng,
@@ -52,7 +52,8 @@ export default function NavigationPanel({
   isActive,
   onOpenFullScreen,
   compact = false,
-    hideLauncher = false,
+  hideLauncher = false,
+  transitDelayMinutes = 0,
 }: Props) {
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [traffic, setTraffic] = useState<TrafficSegment[]>([]);
@@ -177,6 +178,11 @@ export default function NavigationPanel({
           >
             {driverIsNearby ? "Driver Is Nearby" : "On The Way"}
           </span>
+          {transitDelayMinutes > 0 && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-amber-950/60 text-amber-400 border border-amber-800">
+              +{transitDelayMinutes} min delay
+            </span>
+          )}
         </div>
         <span className="text-[9px] text-slate-400 font-mono">
           {driverIsNearby

@@ -1909,8 +1909,9 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                   <span>
                     {userProfile.name || userProfile.email} ·{" "}
                   </span>
-                  {userProfile.role === "PLANNER" && (
-                    <button
+                  {/* Admin link hidden for pilot — re-enable post-pilot when
+                      vendor and client planner accounts are split. */}
+                  {false && userProfile?.role === "PLANNER" && (                    <button
                       onClick={() => router.push("/admin")}
                       className="text-cyan-400 hover:text-cyan-300 underline font-bold"
                     >
@@ -2117,7 +2118,8 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                 siteName={selectedTask.site_name || "Site"}
                 isActive={true}
                 onOpenFullScreen={() => setShowFullScreenNav(true)}
-                                hideLauncher={true}
+                hideLauncher={true}
+                transitDelayMinutes={currentAsset?.transit_delay_minutes || 0}
               />
             )}
 
