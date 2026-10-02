@@ -4,8 +4,12 @@ import React, { useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
 import { supabaseBrowser as supabase } from "@/app/lib/supabase-browser";
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { fetchRoute, RouteResult } from "@/app/lib/routing";
-
+import {
+  fetchRoute,
+  RouteResult,
+  computeETA,
+  simulateTraffic,
+} from "@/app/lib/routing";
 const MapContainer = dynamic(
   () => import("react-leaflet").then((m) => m.MapContainer),
   { ssr: false }
@@ -125,13 +129,25 @@ function haversineMeters(
   return 2 * R * Math.asin(Math.sqrt(x));
 }
 
-// ---- Very rough ETA estimate (assumes ~50 km/h avg) ----
-function estimateEtaMinutes(
+// ---- Real ETA from the cached OSRM route ----
+// If we have a cached route for this manifest, compute the ETA from it
+// (using the same logic as the driver's screen). Otherwise fall back to
+// a straight-line estimate.
+function getEtaFromCachedRoute(
+  manifestGroupId: string,
   lat: number,
   lng: number,
   siteLat: number | null,
-  siteLng: number | null
+  siteLng: number | null,
+  routesCache: Record<string, { route: RouteResult } | undefined>
 ): number | null {
+  const cached = routesCache[manifestGroupId];
+  if (cached?.route) {
+    const traffic = simulateTraffic(cached.route);
+    const eta = computeETA(cached.route, traffic);
+    return eta.etaMinutes;
+  }
+  // Fallback: straight-line estimate
   if (siteLat == null || siteLng == null) return null;
   const meters = haversineMeters([lat, lng], [siteLat, siteLng]);
   const minutes = (meters / 1000 / 50) * 60;
@@ -629,11 +645,13 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
               const color = getStatusColor(v.current_state, v.driver_status);
               const statusLabel = getStatusLabel(v.current_state, v.driver_status);
               const icon = buildVehicleIcon(color);
-              const etaMinutes = estimateEtaMinutes(
+              const etaMinutes = getEtaFromCachedRoute(
+                v.manifest_group_id,
                 v.driver_lat,
                 v.driver_lng,
                 v.site_lat,
-                v.site_lng
+                v.site_lng,
+                routesCacheRef.current
               );
 
               const lastUpdated = v.driver_last_update
