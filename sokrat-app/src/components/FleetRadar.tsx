@@ -447,6 +447,27 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
       .filter((v) => v.site_lat != null && v.site_lng != null)
       .map((v) => [v.site_lat!, v.site_lng!] as [number, number]),
   ];
+    // Spread stacked markers so each is individually tappable.
+  // Same-position trucks get a small deterministic offset in a circle.
+  const stackCounts: Record<string, number> = {};
+  const positionsWithOffset: Record<string, [number, number]> = {};
+
+  vehicles.forEach((v) => {
+    const key = `${v.driver_lat.toFixed(5)}|${v.driver_lng.toFixed(5)}`;
+    const idx = stackCounts[key] || 0;
+    stackCounts[key] = idx + 1;
+
+    // Small circular offset — 40m radius, evenly spaced
+    const offsetDeg = 0.00035; // ~40m at UAE latitudes
+    const angle = (idx * 2 * Math.PI) / 4; // up to 4 slots
+    const offsetLat = Math.cos(angle) * offsetDeg;
+    const offsetLng = Math.sin(angle) * offsetDeg;
+
+    positionsWithOffset[v.manifest_group_id] = [
+      v.driver_lat + offsetLat,
+      v.driver_lng + offsetLng,
+    ];
+  });
 
   return (
     <div className="fixed inset-0 z-[9999] bg-slate-950 flex flex-col isolate">
@@ -622,7 +643,12 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
               return (
                 <Marker
                   key={v.manifest_group_id}
-                  position={[v.driver_lat, v.driver_lng]}
+                  position={
+                    positionsWithOffset[v.manifest_group_id] || [
+                      v.driver_lat,
+                      v.driver_lng,
+                    ]
+                  }
                   icon={icon}
                 >
                   <Popup>
