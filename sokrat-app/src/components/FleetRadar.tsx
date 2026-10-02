@@ -2,7 +2,9 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
-import { supabaseBrowser as supabase } from "@/app/lib/supabase-browser";import type { RealtimeChannel } from "@supabase/supabase-js";
+import { supabaseBrowser as supabase } from "@/app/lib/supabase-browser";
+import type { RealtimeChannel } from "@supabase/supabase-js";
+import { fetchRoute, RouteResult } from "@/app/lib/routing";
 
 const MapContainer = dynamic(
   () => import("react-leaflet").then((m) => m.MapContainer),
@@ -170,6 +172,22 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
   const channelRef = useRef<RealtimeChannel | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Route cache — keyed by manifest ID. Stores the last OSRM route
+  // and the driver position it was computed from, so we don't refetch
+  // on every tiny GPS jitter.
+  const routesCacheRef = useRef<
+    Record<
+      string,
+      {
+        route: RouteResult;
+        originLat: number;
+        originLng: number;
+        siteLat: number;
+        siteLng: number;
+      }
+    >
+  >({});
+  const [routesVersion, setRoutesVersion] = useState(0);
   // Load leaflet once
   useEffect(() => {
     if (!isOpen) return;
@@ -298,6 +316,76 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
     loadVehicles();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen]);
+
+  // Fetch OSRM routes for vehicles whenever the vehicle list changes.
+  // Cache per manifest; only refetch if the driver moved >500m or the
+  // destination changed.
+  useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    const MIN_REFETCH_M = 500;
+
+    const fetchAllRoutes = async () => {
+      let cacheChanged = false;
+
+      for (const v of vehicles) {
+        if (cancelled) return;
+        if (v.site_lat == null || v.site_lng == null) continue;
+
+        const cached = routesCacheRef.current[v.manifest_group_id];
+        const siteChanged =
+          !cached ||
+          Math.abs(cached.siteLat - v.site_lat) > 0.0001 ||
+          Math.abs(cached.siteLng - v.site_lng) > 0.0001;
+
+        let shouldFetch = siteChanged;
+        if (!shouldFetch && cached) {
+          const dLat = Math.abs(v.driver_lat - cached.originLat);
+          const dLng = Math.abs(v.driver_lng - cached.originLng);
+          const cosLat = Math.cos((v.driver_lat * Math.PI) / 180);
+          const meters = Math.sqrt(
+            (dLat * 111_000) ** 2 + (dLng * 111_000 * cosLat) ** 2
+          );
+          if (meters > MIN_REFETCH_M) shouldFetch = true;
+        }
+
+        if (!shouldFetch) continue;
+
+        try {
+          const route = await fetchRoute(
+            [v.driver_lat, v.driver_lng],
+            [v.site_lat, v.site_lng]
+          );
+          if (cancelled) return;
+          routesCacheRef.current[v.manifest_group_id] = {
+            route,
+            originLat: v.driver_lat,
+            originLng: v.driver_lng,
+            siteLat: v.site_lat,
+            siteLng: v.site_lng,
+          };
+          cacheChanged = true;
+        } catch (err) {
+          console.warn(
+            "[FleetRadar] route fetch failed for",
+            v.manifest_group_id,
+            err
+          );
+        }
+      }
+
+      if (cacheChanged && !cancelled) {
+        setRoutesVersion((x) => x + 1);
+      }
+    };
+
+    // Small delay so we don't fire N calls immediately on mount
+    const t = setTimeout(fetchAllRoutes, 400);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [isOpen, vehicles]);
 
   // Realtime — reload whenever manifests change
   useEffect(() => {
@@ -465,9 +553,37 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
               );
             })}
 
-            {/* Route lines — dotted line from each truck to its destination */}
+            {/* Real OSRM routes from each truck to its destination */}
             {vehicles.map((v) => {
               if (v.site_lat == null || v.site_lng == null) return null;
+              const cached = routesCacheRef.current[v.manifest_group_id];
+
+              // If we have a real route, render it with a white outline
+              // (same visual style as the worker mini-maps).
+              if (cached && cached.route.coordinates.length > 1) {
+                return (
+                  <React.Fragment key={`route-${v.manifest_group_id}`}>
+                    <Polyline
+                      positions={cached.route.coordinates}
+                      pathOptions={{
+                        color: "#ffffff",
+                        weight: 7,
+                        opacity: 0.28,
+                      }}
+                    />
+                    <Polyline
+                      positions={cached.route.coordinates}
+                      pathOptions={{
+                        color: "#06b6d4",
+                        weight: 4,
+                        opacity: 0.9,
+                      }}
+                    />
+                  </React.Fragment>
+                );
+              }
+
+              // Fallback — dashed straight line while the route is loading
               return (
                 <Polyline
                   key={`route-${v.manifest_group_id}`}
@@ -478,7 +594,7 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
                   pathOptions={{
                     color: "#06b6d4",
                     weight: 2,
-                    opacity: 0.55,
+                    opacity: 0.4,
                     dashArray: "6 8",
                   }}
                 />
