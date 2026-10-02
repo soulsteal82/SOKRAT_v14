@@ -388,16 +388,7 @@ export default function PlannerDashboard() {
                             )[0];
 
                             return (
-                              <div className="bg-slate-900/60 border border-slate-800 rounded p-2">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-[10px] font-mono text-slate-200">
-                                    {focusPanel.asset_serial}
-                                  </span>
-                                  <span className="text-[9px] px-2 py-0.5 rounded font-bold bg-cyan-950/50 text-cyan-400 border border-cyan-900/60">
-                                    {focusPanel.state}
-                                  </span>
-                                </div>
-
+                               <div className="bg-slate-900/60 border border-slate-800 rounded p-2">
                                 <div className="space-y-0.5 font-mono text-[9px] text-slate-400">
                                   {(focusPanel.custody_history || []).map(
                                     (log: any, i: number) => {
