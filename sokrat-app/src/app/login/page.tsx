@@ -363,7 +363,7 @@ export default function LoginPage() {
         <p className="text-[9px] text-slate-500 text-center mt-4 leading-relaxed">
           Access is by invitation only.
           <br />
-          Contact your Gulf Precast administrator for access.
+Contact your workspace administrator for access.
         </p>
       </div>
     </div>
