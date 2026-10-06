@@ -2763,8 +2763,14 @@ Status:
         inspectorPhone={manifest.siteInspector.phone}
         orderDetails={(selectedTask as any)?.order_details || []}
         assignedAt={selectedTask?.assigned_at}
-        factory={selectedTask?.factories?.[0]?.factory_name || null}
-      />
+          factory={
+            selectedTask?.factories && selectedTask.factories.length > 1
+              ? selectedTask.factories
+                  .map((f: any) => f.factory_name)
+                  .filter(Boolean)
+                  .join(" + ")
+              : selectedTask?.factories?.[0]?.factory_name || null
+          }      />
 
       {/* Full-screen navigation overlay (top-level modal) */}
       <FullScreenNav
