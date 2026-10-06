@@ -2212,19 +2212,21 @@ Reason for Delay
               ref={custodyLogRef}
               className="space-y-1 max-h-40 overflow-y-auto pr-1 font-mono text-[9px] text-slate-400 scrollbar-thin"
             >
-                {currentAsset?.custodyHistory?.map((log, i) => {
-                const ts = log.timestamp;
-                const displayTs =
-                  ts && ts.trim() !== "" && ts !== "[PENDING HARDWARE SCAN]"
-                    ? ts
-                    : "—";
-                return (
-                  <div key={i} className="flex justify-between">
-                    <span>[{displayTs}] {log.state}</span>
-                    <span className="text-cyan-500">→ {log.custody}</span>
-                  </div>
-                );
-              })}
+{currentAsset?.custodyHistory
+  ?.filter((log) => !log.state.startsWith("STAGE_"))
+  ?.map((log, i) => {
+    const ts = log.timestamp;
+    const displayTs =
+      ts && ts.trim() !== "" && ts !== "[PENDING HARDWARE SCAN]"
+        ? ts
+        : "—";
+    return (
+      <div key={i} className="flex justify-between">
+        <span>[{displayTs}] {log.state}</span>
+        <span className="text-cyan-500">→ {log.custody}</span>
+      </div>
+    );
+  })}
             </div>
           </div>
         )}
