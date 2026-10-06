@@ -218,6 +218,7 @@ export default function TaskDashboard({
   const { user, loading: authLoading } = useAuth();
   const [tasks, setTasks] = useState<UserTask[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showCompleted, setShowCompleted] = useState(false);
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
 const [expandedTaskId, setExpandedTaskId] = useState<string | null>(null);
 const expandedTaskIdRef = useRef<string | null>(null);
@@ -633,6 +634,16 @@ useEffect(() => { expandedTaskIdRef.current = expandedTaskId; }, [expandedTaskId
       </div>
     );
   }
+
+  // Split into active and completed. "Completed" = INSTALLATION_COMPLETED
+  // or REJECTED. Everything else is active.
+  const isTaskComplete = (t: UserTask): boolean => {
+    const s = t.current_state || "";
+    return s === "INSTALLATION_COMPLETED" || s.startsWith("REJECTED");
+  };
+
+  const activeTasks = tasks.filter((t) => !isTaskComplete(t));
+  const completedTasks = tasks.filter((t) => isTaskComplete(t));
 // ---- Status pill derived from current_state ----
 function getStatusPill(state: string | undefined) {
   const s = state || "";
@@ -727,7 +738,7 @@ function getStatusPill(state: string | undefined) {
       </div>
 
       <div className="space-y-1.5">
-              {tasks.map((task) => {
+              {activeTasks.map((task) => {
           const isMultiFactory = task.factories && task.factories.length > 1;
           const isExpanded = expandedTaskId === task.id;
           const isSimForThisTask = simPos?.taskId === task.id;
@@ -1051,6 +1062,67 @@ function getStatusPill(state: string | undefined) {
           );
         })}
       </div>
+
+      {/* Completed tasks — collapsed by default */}
+      {completedTasks.length > 0 && (
+        <div className="border-t border-slate-800/60 pt-2 space-y-1.5">
+          <button
+            onClick={() => setShowCompleted((v) => !v)}
+            className="w-full text-[10px] text-slate-400 hover:text-cyan-400 font-bold uppercase tracking-wider flex items-center justify-between px-1 py-1 transition"
+          >
+            <span>
+              ✅ Completed ({completedTasks.length})
+            </span>
+            <span className="text-cyan-500">
+              {showCompleted ? "▲ Hide" : "▼ Show"}
+            </span>
+          </button>
+
+          {showCompleted && (
+            <div className="space-y-1.5">
+              {completedTasks.map((task) => {
+                const isMultiFactory = task.factories && task.factories.length > 1;
+                const isExpanded = expandedTaskId === task.id;
+                const isSimForThisTask = simPos?.taskId === task.id;
+
+                return (
+                  <div
+                    key={task.id}
+                    className={`bg-slate-900/60 border rounded text-xs transition cursor-pointer opacity-70 ${
+                      isExpanded
+                        ? "border-cyan-500 ring-1 ring-cyan-500/40"
+                        : "border-slate-800 hover:border-cyan-800"
+                    }`}
+                    onClick={() => handleTaskClick(task)}
+                  >
+                    <div className="p-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-mono text-slate-400 text-[10px] truncate">
+                          {task.manifest_group_id}
+                        </span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <span
+                            className={`text-[8px] px-2 py-0.5 rounded font-bold border ${getStatusPill(task.current_state).cls}`}
+                          >
+                            {getStatusPill(task.current_state).label}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex justify-between mt-1 text-[9px] text-slate-500">
+                        <span>Assigned by: {task.assigned_by}</span>
+                        <span className="text-slate-500">{task.status}</span>
+                      </div>
+                      <div className="mt-0.5 text-[8px] text-slate-600">
+                        🕐 {formatTimestamp(task.assigned_at)}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
