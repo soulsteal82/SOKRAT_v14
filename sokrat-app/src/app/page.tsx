@@ -19,7 +19,12 @@ import NavigationPanel from "@/components/NavigationPanel";
 import FullScreenNav from "@/components/FullScreenNav";
 import PlannerDashboard from "@/components/PlannerDashboard";
 import { startDriverGpsBroadcast, DriverGpsHandle } from "@/app/lib/driverGps";
-import { supabaseBrowser as supabase } from "@/app/lib/supabase-browser";
+import { lookupInspector } from "@/app/lib/masterContacts";
+import {
+  createLocationRequest,
+  getPendingRequest,
+  resolveAllForManifest,
+} from "@/app/lib/locationRequests";import { supabaseBrowser as supabase } from "@/app/lib/supabase-browser";
 
 const DeliveryNoteModal = dynamic(
   () => import("@/components/DeliveryNoteModal"),
@@ -343,8 +348,51 @@ export default function Home() {
   // Map state
 
   const [selectedDispatcherDefect, setSelectedDispatcherDefect] = useState(DEFECT_VECTORS[0]);
+    const [enrichedInspectorPhone, setEnrichedInspectorPhone] = useState<string | null>(null);
+  const [enrichedInspectorEmployer, setEnrichedInspectorEmployer] = useState<string | null>(null);
+    const [hasPendingLocationRequest, setHasPendingLocationRequest] = useState(false);
+  const [locationRequestBusy, setLocationRequestBusy] = useState(false);
   const [selectedInspectorDefect, setSelectedInspectorDefect] = useState(DEFECT_VECTORS[0]);
   const [dispatcherRejectFiles, setDispatcherRejectFiles] = useState<File[]>([]);
+    // Check for pending location requests on the current manifest.
+  useEffect(() => {
+    const manifestId = selectedTask?.manifest_group_id;
+    if (!manifestId) {
+      setHasPendingLocationRequest(false);
+      return;
+    }
+    let cancelled = false;
+    getPendingRequest(manifestId).then((req) => {
+      if (cancelled) return;
+      setHasPendingLocationRequest(!!req);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTask?.manifest_group_id, selectedTask?.site_latitude]);
+    // Enrich inspector contact from master_contacts if the manifest
+  // has a name but no phone.
+  useEffect(() => {
+    const inspectorName = selectedTask?.inspector_name;
+    const inspectorPhone = selectedTask?.inspector_phone;
+
+    if (!inspectorName || inspectorPhone) {
+      setEnrichedInspectorPhone(null);
+      setEnrichedInspectorEmployer(null);
+      return;
+    }
+
+    let cancelled = false;
+    lookupInspector(inspectorName).then((contact) => {
+      if (cancelled) return;
+      setEnrichedInspectorPhone(contact?.phone ?? null);
+      setEnrichedInspectorEmployer(contact?.employer ?? null);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTask?.inspector_name, selectedTask?.inspector_phone]);
   const [inspectorRejectFiles, setInspectorRejectFiles] = useState<File[]>([]);
 
 const currentAsset = assets.length > 0 
@@ -1527,7 +1575,29 @@ const saveTaskState = async (
     }, 5000);
     return () => clearInterval(id);
   }, [selectedTask?.manifest_group_id]);
-
+  const handleRequestLocation = async () => {
+    if (!selectedTask || locationRequestBusy) return;
+    setLocationRequestBusy(true);
+    try {
+      const name = userProfile?.name || userProfile?.email || "Unknown";
+      const role = userProfile?.role || "UNKNOWN";
+      const res = await createLocationRequest({
+        manifestGroupId: selectedTask.manifest_group_id,
+        requestedByName: name,
+        requestedByRole: role,
+      });
+      if (res.success) {
+        setHasPendingLocationRequest(true);
+        alert(
+          "📍 Request sent to the inspector.\n\nThey'll see a notification in their app to share the site location."
+        );
+      } else {
+        alert("Failed to send request: " + (res.error || "Unknown error"));
+      }
+    } finally {
+      setLocationRequestBusy(false);
+    }
+  };
   const renderDispatcherActions = () => {
       if (!profile) return null; // guard against null during transition
     const loadingDuration = getLoadingDuration();
@@ -1564,6 +1634,23 @@ const saveTaskState = async (
         <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold mb-1">
           Available System Actions:
         </span>
+                {/* Request Site Location — only if not yet shared */}
+        {!selectedTask?.site_latitude && !hasPendingLocationRequest && (
+          <button
+            onClick={handleRequestLocation}
+            disabled={locationRequestBusy}
+            className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold p-3 rounded text-sm uppercase tracking-wider transition disabled:opacity-50 flex items-center justify-center gap-2"
+          >
+            📍 Request Site Location from Inspector
+          </button>
+        )}
+
+        {/* Pending indication */}
+        {!selectedTask?.site_latitude && hasPendingLocationRequest && (
+          <div className="w-full bg-slate-800 border border-slate-700 text-amber-400 text-[10px] font-bold p-3 rounded text-center uppercase tracking-wider">
+            ⏳ Awaiting inspector's location…
+          </div>
+        )}
                 {/* View Delivery Note — only after loading complete */}
 {currentAsset &&
  currentAsset.state.startsWith("DISPATCHED") && (
@@ -2093,7 +2180,26 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                 Broadcasting Live GPS
               </div>
             )}
+            {/* Request Site Location — only if dispatched and site GPS missing */}
+            {currentAsset?.state?.startsWith("DISPATCHED") &&
+             !selectedTask.site_latitude &&
+             !hasPendingLocationRequest && (
+              <button
+                onClick={handleRequestLocation}
+                disabled={locationRequestBusy}
+                className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold p-3 rounded text-sm uppercase tracking-wider transition disabled:opacity-50"
+              >
+                📍 Request Site Location from Inspector
+              </button>
+            )}
 
+            {currentAsset?.state?.startsWith("DISPATCHED") &&
+             !selectedTask.site_latitude &&
+             hasPendingLocationRequest && (
+              <div className="w-full bg-slate-800 border border-slate-700 text-amber-400 text-[10px] font-bold p-3 rounded text-center uppercase tracking-wider">
+                ⏳ Awaiting inspector's location…
+              </div>
+            )}
             {/* Big "Open Navigation" launch card for the driver */}
             {currentAsset?.state?.startsWith("DISPATCHED") &&
              selectedTask.site_latitude &&
@@ -2393,14 +2499,37 @@ Status:
         <div className="border-t border-slate-800/80 pt-1.5">
 
                     {/* INSPECTOR NODE */}
-          {profile === "INSPECTOR" && manifest.scope === "FULL" && selectedTask && (
+        {profile === "INSPECTOR" && manifest.scope === "FULL" && selectedTask && (
             <div className="space-y-3 animate-fade-in">
+              {/* Pending location request banner */}
+              {hasPendingLocationRequest && !selectedTask?.site_latitude && (
+                <div className="bg-amber-950/60 border-2 border-amber-600/60 rounded-lg p-3 space-y-2 animate-pulse">
+                  <div className="text-[11px] text-amber-300 font-bold uppercase tracking-widest text-center">
+                    ⚠️ Site Location Requested
+                  </div>
+                  <div className="text-[10px] text-slate-300 text-center">
+                    The dispatch team needs your site coordinates to route the driver.
+                  </div>
+                  <button
+                    onClick={async () => {
+                      // Scroll to / trigger the SiteGpsButton below
+                      const el = document.getElementById("site-gps-panel");
+                      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }}
+                    className="w-full bg-amber-600 hover:bg-amber-500 text-slate-950 font-bold p-3 rounded text-sm uppercase tracking-wider transition"
+                  >
+                    📍 Share Location Now
+                  </button>
+                </div>
+              )}
+
               <span className="block text-[8px] uppercase tracking-wider text-slate-400 font-bold mb-2">
                 Available System Actions:
               </span>
               {!currentAsset?.state.includes("REJECTED") ? (
                 <div className="space-y-3">
-                                  {/* Site GPS sharing — two-way with ERP planner */}
+                  {/* Site GPS sharing — two-way with ERP planner */}
+                  <div id="site-gps-panel">
                   <SiteGpsButton
                     manifestGroupId={manifest.manifest_group_id}
                     siteName={selectedTask?.site_name}
@@ -2408,7 +2537,7 @@ Status:
                     currentLng={selectedTask?.site_longitude}
                     currentSource={selectedTask?.site_gps_source}
                     currentUpdatedAt={selectedTask?.site_gps_updated_at}
-                    onSaved={(la, ln, src) => {
+                    onSaved={async (la, ln, src) => {
                       setSelectedTask((prev) =>
                         prev
                           ? {
@@ -2420,8 +2549,14 @@ Status:
                             }
                           : prev
                       );
+                      // Resolve any pending location requests for this manifest
+                      if (selectedTask?.manifest_group_id) {
+                        await resolveAllForManifest(selectedTask.manifest_group_id);
+                        setHasPendingLocationRequest(false);
+                      }
                     }}
                   />
+                  </div>
                                     {/* View Delivery Note — inspector can verify against physical copy */}
 {currentAsset?.state?.startsWith("DISPATCHED") && (
   <button
