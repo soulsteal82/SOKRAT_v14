@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { lookupInspector } from "@/app/lib/masterContacts";
+import { lookupInspector, enrichVehicleFields } from "@/app/lib/masterContacts";
 type OrderItem = {
   panel_id?: string;
   type?: string;
@@ -44,12 +44,43 @@ export default function DeliveryNoteModal({
   factory,
 }: Props) {
   if (!isOpen) return null;
-    const [enrichedInspector, setEnrichedInspector] = useState<{
+  const [enrichedInspector, setEnrichedInspector] = useState<{
     name: string | null;
     phone: string | null;
     email: string | null;
     employer: string | null;
   }>({ name: null, phone: null, email: null, employer: null });
+
+  const [enrichedVehicle, setEnrichedVehicle] = useState<{
+    plate: string | null;
+    ownership: string | null;
+    trailer: string | null;
+  }>({ plate: null, ownership: null, trailer: null });
+
+  useEffect(() => {
+    if (!isOpen || !vehiclePlate) {
+      setEnrichedVehicle({ plate: null, ownership: null, trailer: null });
+      return;
+    }
+
+    let cancelled = false;
+    enrichVehicleFields({
+      vehicle_plate: vehiclePlate,
+      vehicle_ownership: null,
+      vehicle_trailer_type: vehicleTrailerType ?? null,
+    }).then((v) => {
+      if (cancelled) return;
+      setEnrichedVehicle({
+        plate: v.vehicle_plate,
+        ownership: v.vehicle_ownership,
+        trailer: v.vehicle_trailer_type,
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, vehiclePlate, vehicleTrailerType]);
 
   useEffect(() => {
     if (!isOpen || !inspectorName) {
@@ -186,12 +217,17 @@ export default function DeliveryNoteModal({
                 Vehicle
               </span>
               <span className="text-slate-900 font-mono font-bold">
-                {vehiclePlate || "—"}
+                {enrichedVehicle.plate || vehiclePlate || "—"}
               </span>
-              {vehicleTrailerType && (
+              {(enrichedVehicle.trailer || vehicleTrailerType) && (
                 <span className="text-slate-600 ml-2">
-                  ({vehicleTrailerType})
+                  ({enrichedVehicle.trailer || vehicleTrailerType})
                 </span>
+              )}
+              {enrichedVehicle.ownership && (
+                <div className="text-xs text-slate-600 italic">
+                  {enrichedVehicle.ownership}
+                </div>
               )}
             </div>
             <div>

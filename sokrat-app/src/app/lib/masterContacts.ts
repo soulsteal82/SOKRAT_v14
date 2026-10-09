@@ -71,6 +71,34 @@ export async function lookupVehicle(
 }
 
 /**
+ * Enrich a manifest's vehicle details using master_vehicles.
+ * If the manifest is missing vehicle_ownership or trailer type,
+ * this returns an object with those fields filled in.
+ */
+export async function enrichVehicleFields(manifest: {
+  vehicle_plate: string | null;
+  vehicle_ownership: string | null;
+  vehicle_trailer_type: string | null;
+}): Promise<{
+  vehicle_plate: string | null;
+  vehicle_ownership: string | null;
+  vehicle_trailer_type: string | null;
+}> {
+  // If both fields are already populated, skip the lookup.
+  if (manifest.vehicle_ownership && manifest.vehicle_trailer_type) {
+    return { ...manifest };
+  }
+
+  const vehicle = await lookupVehicle(manifest.vehicle_plate);
+
+  return {
+    vehicle_plate: manifest.vehicle_plate,
+    vehicle_ownership: manifest.vehicle_ownership ?? vehicle?.ownership ?? null,
+    vehicle_trailer_type: manifest.vehicle_trailer_type ?? vehicle?.trailer_type ?? null,
+  };
+}
+
+/**
  * Enrich a manifest's inspector details using master_contacts.
  * If the manifest is missing inspector_phone or inspector_email,
  * this returns an object with those fields filled in.
