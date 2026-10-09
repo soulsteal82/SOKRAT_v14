@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { lookupInspector } from "@/app/lib/masterContacts";
 type OrderItem = {
   panel_id?: string;
   type?: string;
@@ -42,6 +44,34 @@ export default function DeliveryNoteModal({
   factory,
 }: Props) {
   if (!isOpen) return null;
+    const [enrichedInspector, setEnrichedInspector] = useState<{
+    name: string | null;
+    phone: string | null;
+    email: string | null;
+    employer: string | null;
+  }>({ name: null, phone: null, email: null, employer: null });
+
+  useEffect(() => {
+    if (!isOpen || !inspectorName) {
+      setEnrichedInspector({ name: null, phone: null, email: null, employer: null });
+      return;
+    }
+
+    let cancelled = false;
+    lookupInspector(inspectorName).then((contact) => {
+      if (cancelled) return;
+      setEnrichedInspector({
+        name: inspectorName,
+        phone: inspectorPhone ?? contact?.phone ?? null,
+        email: contact?.email ?? null,
+        employer: contact?.employer ?? null,
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, inspectorName, inspectorPhone]);
 
   const totalPanels = orderDetails.reduce(
     (sum, item) => sum + (item.quantity || 0),
@@ -180,18 +210,23 @@ export default function DeliveryNoteModal({
           </div>
 
           {/* Inspector */}
-          {inspectorName && (
+          {(enrichedInspector.name || inspectorName) && (
             <div className="text-sm">
               <span className="text-slate-500 uppercase text-xs font-bold block">
                 Site Inspector
               </span>
               <span className="text-slate-900 font-bold">
-                {inspectorName}
+                {enrichedInspector.name || inspectorName}
               </span>
-              {inspectorPhone && (
+              {(enrichedInspector.phone || inspectorPhone) && (
                 <span className="text-slate-600 font-mono ml-2 text-xs">
-                  {inspectorPhone}
+                  {enrichedInspector.phone || inspectorPhone}
                 </span>
+              )}
+              {enrichedInspector.employer && (
+                <div className="text-xs text-slate-500 italic">
+                  {enrichedInspector.employer}
+                </div>
               )}
             </div>
           )}
