@@ -1509,11 +1509,27 @@ const saveTaskState = async (
 
       if (assetError) throw assetError;
 
+      // Clear all pending location requests — otherwise the request
+      // button won't come back after a reset.
+      const { error: locReqError } = await supabase
+        .from("location_requests")
+        .update({
+          resolved: true,
+          resolved_at: new Date().toISOString(),
+        })
+        .eq("resolved", false);
+
+      if (locReqError) {
+        console.warn("Failed to clear location requests:", locReqError);
+      }
+
       // Clear local state
       setSelectedTask(null);
       setSelectedDelayReason("");
       setDispatcherRejectFiles([]);
       setInspectorRejectFiles([]);
+      setHasPendingLocationRequest(false);
+      setLocationRequestBusy(false);
       setEpd1File(null);
       setMix1File(null);
       setEpd2File(null);
