@@ -5,7 +5,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { supabaseBrowser as supabase } from "@/app/lib/supabase-browser";
 import { useAuth } from "@/app/lib/auth-context";
 import { reverseGeocode } from "../app/lib/geocode";
-import { fetchRoute } from "../app/lib/routing";
+import { lookupInspector } from "../app/lib/masterContacts";import { fetchRoute } from "../app/lib/routing";
 import { simulateDriverAlongRoute } from "../app/lib/simulate";
 import NavigationPanel from "./NavigationPanel";
 import React from "react";
@@ -116,6 +116,64 @@ function useSiteLabel(
   }, [lat, lng]);
 
   return label;
+}
+function InspectorRow({ task }: { task: UserTask }) {
+  const [enrichedPhone, setEnrichedPhone] = React.useState<string | null>(null);
+  const [enrichedEmployer, setEnrichedEmployer] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!task.inspector_name) {
+      setEnrichedPhone(null);
+      setEnrichedEmployer(null);
+      return;
+    }
+    // Skip lookup if we already have a phone
+    if (task.inspector_phone) {
+      setEnrichedPhone(null);
+      setEnrichedEmployer(null);
+      return;
+    }
+    let cancelled = false;
+    lookupInspector(task.inspector_name).then((contact) => {
+      if (cancelled) return;
+      setEnrichedPhone(contact?.phone ?? null);
+      setEnrichedEmployer(contact?.employer ?? null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [task.inspector_name, task.inspector_phone]);
+
+  if (!task.inspector_name) return null;
+
+  const displayPhone = task.inspector_phone || enrichedPhone;
+
+  return (
+    <div className="border-t border-slate-800/60 pt-1 text-[9px] space-y-0.5">
+      <div className="grid grid-cols-2 gap-1">
+        <span className="text-slate-500">👷 Inspector:</span>
+        <span className="text-slate-200 text-right">
+          {task.inspector_name}
+        </span>
+      </div>
+      {displayPhone && (
+        <div className="grid grid-cols-2 gap-1">
+          <span className="text-slate-500">📞 Phone:</span>
+          <span className="text-slate-200 text-right font-mono text-[8px]">
+            {displayPhone}
+          </span>
+        </div>
+      )}
+      {enrichedEmployer && (
+        <div className="grid grid-cols-2 gap-1">
+          <span className="text-slate-500">🏢 Employer:</span>
+          <span className="text-slate-300 text-right text-[8px] italic">
+            {enrichedEmployer}
+          </span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 function SiteRow({ task }: { task: UserTask }) {
@@ -886,24 +944,7 @@ function getStatusPill(state: string | undefined) {
                     </div>
                   )}
 
-                  {task.inspector_name && (
-                    <div className="border-t border-slate-800/60 pt-1 text-[9px] space-y-0.5">
-                      <div className="grid grid-cols-2 gap-1">
-                        <span className="text-slate-500">👷 Inspector:</span>
-                        <span className="text-slate-200 text-right">
-                          {task.inspector_name}
-                        </span>
-                      </div>
-                      {task.inspector_phone && (
-                        <div className="grid grid-cols-2 gap-1">
-                          <span className="text-slate-500">📞 Phone:</span>
-                          <span className="text-slate-200 text-right font-mono text-[8px]">
-                            {task.inspector_phone}
-                          </span>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <InspectorRow task={task} />
 
                   <SiteRow task={task} />
 
