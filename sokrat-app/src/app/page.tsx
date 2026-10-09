@@ -354,20 +354,31 @@ export default function Home() {
   const [locationRequestBusy, setLocationRequestBusy] = useState(false);
   const [selectedInspectorDefect, setSelectedInspectorDefect] = useState(DEFECT_VECTORS[0]);
   const [dispatcherRejectFiles, setDispatcherRejectFiles] = useState<File[]>([]);
-    // Check for pending location requests on the current manifest.
+  // Check for pending location requests on the current manifest.
+  // Runs every 5 seconds while a task is open, so the inspector
+  // sees new requests without needing to collapse/re-expand.
   useEffect(() => {
     const manifestId = selectedTask?.manifest_group_id;
     if (!manifestId) {
       setHasPendingLocationRequest(false);
       return;
     }
+
     let cancelled = false;
-    getPendingRequest(manifestId).then((req) => {
+
+    const checkPending = async () => {
+      const req = await getPendingRequest(manifestId);
       if (cancelled) return;
       setHasPendingLocationRequest(!!req);
-    });
+    };
+
+    // Fire immediately, then every 5 seconds
+    checkPending();
+    const interval = setInterval(checkPending, 5000);
+
     return () => {
       cancelled = true;
+      clearInterval(interval);
     };
   }, [selectedTask?.manifest_group_id, selectedTask?.site_latitude]);
     // Enrich inspector contact from master_contacts if the manifest
