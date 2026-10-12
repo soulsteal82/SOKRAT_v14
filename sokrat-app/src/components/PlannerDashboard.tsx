@@ -1,15 +1,26 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from "react";
-import { supabaseBrowser as supabase } from "@/app/lib/supabase-browser";import { classifyDelay } from "@/app/lib/delay";
+import { supabaseBrowser as supabase } from "@/app/lib/supabase-browser";
+import { classifyDelay } from "@/app/lib/delay";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import FleetRadar from "./FleetRadar";
+import {
+  MasterContact,
+  MasterVehicle,
+  listContacts,
+  createContact,
+  updateContact,
+  deleteContact,
+  listVehicles,
+  createVehicle,
+  updateVehicle,
+  deleteVehicle,
+} from "@/app/lib/masterContacts";
 
 // ============================================================
-// Planner God-View — live table of all active trips.
-//
-// Columns:
-//   Trip   |   Status   |   Delays
+// Planner God-View — tabs for Trips / Contacts / Vehicles
+// plus Fleet Radar. Existing trips table preserved.
 // ============================================================
 
 type PlannerRow = {
@@ -22,7 +33,8 @@ type PlannerRow = {
   total_delay_minutes: number;
 };
 
-// Human-readable label + color for each asset state
+type ActiveTab = "trips" | "contacts" | "vehicles";
+
 function getStatusMeta(state: string | undefined) {
   const s = state || "";
   if (s.includes("REJECTED"))
@@ -50,8 +62,6 @@ function getStatusMeta(state: string | undefined) {
   return { label: s || "—", color: "bg-slate-800 text-slate-400 border-slate-700" };
 }
 
-// Rank order for "least advanced state" — used to pick a manifest's
-// representative state (same rule as TaskDashboard).
 const stateRank = (s: string): number => {
   if (!s) return 0;
   if (s.startsWith("REJECTED")) return -1;
@@ -68,14 +78,500 @@ const stateRank = (s: string): number => {
   return 0;
 };
 
+// ============================================================
+// CONTACTS TAB
+// ============================================================
+
+function ContactsTab() {
+  const [contacts, setContacts] = useState<MasterContact[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<MasterContact | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({
+    role: "INSPECTOR" as "INSPECTOR" | "DISPATCHER" | "DRIVER",
+    name: "",
+    phone: "",
+    email: "",
+    employer: "",
+  });
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const data = await listContacts();
+    setContacts(data);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const resetForm = () => {
+    setForm({ role: "INSPECTOR", name: "", phone: "", email: "", employer: "" });
+    setEditing(null);
+    setShowForm(false);
+  };
+
+  const handleEdit = (c: MasterContact) => {
+    setForm({
+      role: c.role,
+      name: c.name,
+      phone: c.phone ?? "",
+      email: c.email ?? "",
+      employer: c.employer ?? "",
+    });
+    setEditing(c);
+    setShowForm(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!form.name.trim()) {
+      alert("Name is required");
+      return;
+    }
+    setBusy(true);
+    let res;
+    if (editing) {
+      res = await updateContact(editing.id, {
+        role: form.role,
+        name: form.name.trim(),
+        phone: form.phone.trim() || null,
+        email: form.email.trim() || null,
+        employer: form.employer.trim() || null,
+      });
+    } else {
+      res = await createContact({
+        role: form.role,
+        name: form.name.trim(),
+        phone: form.phone.trim() || null,
+        email: form.email.trim() || null,
+        employer: form.employer.trim() || null,
+      });
+    }
+    setBusy(false);
+    if (!res.success) {
+      alert("Error: " + (res.error || "Unknown"));
+      return;
+    }
+    resetForm();
+    await load();
+  };
+
+  const handleDelete = async (c: MasterContact) => {
+    if (!confirm(`Delete contact "${c.name}"?`)) return;
+    setBusy(true);
+    const res = await deleteContact(c.id);
+    setBusy(false);
+    if (!res.success) {
+      alert("Error: " + (res.error || "Unknown"));
+      return;
+    }
+    await load();
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+          Contacts ({contacts.length})
+        </span>
+        {!showForm && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="text-[10px] bg-cyan-600 hover:bg-cyan-500 text-slate-950 px-3 py-1 rounded font-black uppercase tracking-wider"
+          >
+            + Add Contact
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="bg-slate-900 border border-cyan-800/60 rounded-lg p-3 space-y-2">
+          <div className="text-[10px] font-bold text-cyan-300 uppercase tracking-wider">
+            {editing ? "Edit Contact" : "New Contact"}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[8px] text-slate-500 uppercase font-bold mb-1">
+                Role
+              </label>
+              <select
+                value={form.role}
+                onChange={(e) => setForm({ ...form, role: e.target.value as any })}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+              >
+                <option value="INSPECTOR">Inspector</option>
+                <option value="DISPATCHER">Dispatcher</option>
+                <option value="DRIVER">Driver</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[8px] text-slate-500 uppercase font-bold mb-1">
+                Name *
+              </label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+              />
+            </div>
+            <div>
+              <label className="block text-[8px] text-slate-500 uppercase font-bold mb-1">
+                Phone
+              </label>
+              <input
+                type="text"
+                value={form.phone}
+                onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                placeholder="+971 50 xxx xxxx"
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+              />
+            </div>
+            <div>
+              <label className="block text-[8px] text-slate-500 uppercase font-bold mb-1">
+                Email
+              </label>
+              <input
+                type="email"
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+              />
+            </div>
+            <div className="col-span-2">
+              <label className="block text-[8px] text-slate-500 uppercase font-bold mb-1">
+                Employer
+              </label>
+              <input
+                type="text"
+                value={form.employer}
+                onChange={(e) => setForm({ ...form, employer: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={handleSubmit}
+              disabled={busy}
+              className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold py-2 rounded text-xs uppercase tracking-wider disabled:opacity-50"
+            >
+              {busy ? "Saving…" : editing ? "Update" : "Create"}
+            </button>
+            <button
+              onClick={resetForm}
+              disabled={busy}
+              className="px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded text-xs uppercase tracking-wider"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-[10px] text-slate-500 italic">Loading…</div>
+      ) : contacts.length === 0 ? (
+        <div className="text-[10px] text-slate-500 italic">
+          No contacts yet. Tap "+ Add Contact" to create one.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-800 text-[9px] uppercase tracking-wider text-slate-500">
+                <th className="text-left px-2 py-1.5">Role</th>
+                <th className="text-left px-2 py-1.5">Name</th>
+                <th className="text-left px-2 py-1.5">Phone</th>
+                <th className="text-left px-2 py-1.5">Employer</th>
+                <th className="text-right px-2 py-1.5">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {contacts.map((c) => (
+                <tr key={c.id} className="border-b border-slate-900 hover:bg-slate-900/40">
+                  <td className="px-2 py-1.5">
+                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 font-bold">
+                      {c.role}
+                    </span>
+                  </td>
+                  <td className="px-2 py-1.5 text-slate-200">{c.name}</td>
+                  <td className="px-2 py-1.5 text-slate-400 font-mono text-[10px]">
+                    {c.phone || "—"}
+                  </td>
+                  <td className="px-2 py-1.5 text-slate-400 text-[10px]">
+                    {c.employer || "—"}
+                  </td>
+                  <td className="px-2 py-1.5 text-right">
+                    <button
+                      onClick={() => handleEdit(c)}
+                      disabled={busy}
+                      className="text-[9px] text-cyan-400 hover:text-cyan-300 font-bold mr-3 disabled:opacity-30"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(c)}
+                      disabled={busy}
+                      className="text-[9px] text-red-400 hover:text-red-300 font-bold disabled:opacity-30"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// VEHICLES TAB
+// ============================================================
+
+function VehiclesTab() {
+  const [vehicles, setVehicles] = useState<MasterVehicle[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<MasterVehicle | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [form, setForm] = useState({
+    plate_number: "",
+    trailer_type: "FLATBED",
+    ownership: "OWNED" as "OWNED" | "RENTED",
+  });
+  const [busy, setBusy] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    const data = await listVehicles();
+    setVehicles(data);
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const resetForm = () => {
+    setForm({ plate_number: "", trailer_type: "FLATBED", ownership: "OWNED" });
+    setEditing(null);
+    setShowForm(false);
+  };
+
+  const handleEdit = (v: MasterVehicle) => {
+    setForm({
+      plate_number: v.plate_number,
+      trailer_type: v.trailer_type ?? "FLATBED",
+      ownership: (v.ownership as "OWNED" | "RENTED") ?? "OWNED",
+    });
+    setEditing(v);
+    setShowForm(true);
+  };
+
+  const handleSubmit = async () => {
+    if (!form.plate_number.trim()) {
+      alert("Plate number is required");
+      return;
+    }
+    setBusy(true);
+    let res;
+    if (editing) {
+      res = await updateVehicle(editing.id, {
+        plate_number: form.plate_number.trim(),
+        trailer_type: form.trailer_type || null,
+        ownership: form.ownership,
+      });
+    } else {
+      res = await createVehicle({
+        plate_number: form.plate_number.trim(),
+        trailer_type: form.trailer_type || null,
+        ownership: form.ownership,
+      });
+    }
+    setBusy(false);
+    if (!res.success) {
+      alert("Error: " + (res.error || "Unknown"));
+      return;
+    }
+    resetForm();
+    await load();
+  };
+
+  const handleDelete = async (v: MasterVehicle) => {
+    if (!confirm(`Delete vehicle "${v.plate_number}"?`)) return;
+    setBusy(true);
+    const res = await deleteVehicle(v.id);
+    setBusy(false);
+    if (!res.success) {
+      alert("Error: " + (res.error || "Unknown"));
+      return;
+    }
+    await load();
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+          Vehicles ({vehicles.length})
+        </span>
+        {!showForm && (
+          <button
+            onClick={() => setShowForm(true)}
+            className="text-[10px] bg-cyan-600 hover:bg-cyan-500 text-slate-950 px-3 py-1 rounded font-black uppercase tracking-wider"
+          >
+            + Add Vehicle
+          </button>
+        )}
+      </div>
+
+      {showForm && (
+        <div className="bg-slate-900 border border-cyan-800/60 rounded-lg p-3 space-y-2">
+          <div className="text-[10px] font-bold text-cyan-300 uppercase tracking-wider">
+            {editing ? "Edit Vehicle" : "New Vehicle"}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <div className="col-span-2">
+              <label className="block text-[8px] text-slate-500 uppercase font-bold mb-1">
+                Plate Number *
+              </label>
+              <input
+                type="text"
+                value={form.plate_number}
+                onChange={(e) => setForm({ ...form, plate_number: e.target.value })}
+                placeholder="A-00001"
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200 font-mono"
+              />
+            </div>
+            <div>
+              <label className="block text-[8px] text-slate-500 uppercase font-bold mb-1">
+                Trailer Type
+              </label>
+              <select
+                value={form.trailer_type}
+                onChange={(e) => setForm({ ...form, trailer_type: e.target.value })}
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+              >
+                <option value="FLATBED">FLATBED</option>
+                <option value="LOWBOY">LOWBOY</option>
+                <option value="STEP_DECK">STEP_DECK</option>
+                <option value="REMOVABLE_GOOSENECK">REMOVABLE_GOOSENECK</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-[8px] text-slate-500 uppercase font-bold mb-1">
+                Ownership
+              </label>
+              <select
+                value={form.ownership}
+                onChange={(e) =>
+                  setForm({ ...form, ownership: e.target.value as "OWNED" | "RENTED" })
+                }
+                className="w-full bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-200"
+              >
+                <option value="OWNED">OWNED</option>
+                <option value="RENTED">RENTED</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button
+              onClick={handleSubmit}
+              disabled={busy}
+              className="flex-1 bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-bold py-2 rounded text-xs uppercase tracking-wider disabled:opacity-50"
+            >
+              {busy ? "Saving…" : editing ? "Update" : "Create"}
+            </button>
+            <button
+              onClick={resetForm}
+              disabled={busy}
+              className="px-4 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold py-2 rounded text-xs uppercase tracking-wider"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="text-[10px] text-slate-500 italic">Loading…</div>
+      ) : vehicles.length === 0 ? (
+        <div className="text-[10px] text-slate-500 italic">
+          No vehicles yet. Tap "+ Add Vehicle" to create one.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-slate-800 text-[9px] uppercase tracking-wider text-slate-500">
+                <th className="text-left px-2 py-1.5">Plate</th>
+                <th className="text-left px-2 py-1.5">Trailer</th>
+                <th className="text-left px-2 py-1.5">Ownership</th>
+                <th className="text-right px-2 py-1.5">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {vehicles.map((v) => (
+                <tr key={v.id} className="border-b border-slate-900 hover:bg-slate-900/40">
+                  <td className="px-2 py-1.5 font-mono text-slate-200">
+                    {v.plate_number}
+                  </td>
+                  <td className="px-2 py-1.5 text-slate-300 text-[10px]">
+                    {v.trailer_type || "—"}
+                  </td>
+                  <td className="px-2 py-1.5">
+                    <span
+                      className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${
+                        v.ownership === "OWNED"
+                          ? "bg-green-950/60 text-green-400"
+                          : "bg-amber-950/60 text-amber-400"
+                      }`}
+                    >
+                      {v.ownership || "—"}
+                    </span>
+                  </td>
+                  <td className="px-2 py-1.5 text-right">
+                    <button
+                      onClick={() => handleEdit(v)}
+                      disabled={busy}
+                      className="text-[9px] text-cyan-400 hover:text-cyan-300 font-bold mr-3 disabled:opacity-30"
+                    >
+                      Edit
+                    </button>
+                    <button
+                      onClick={() => handleDelete(v)}
+                      disabled={busy}
+                      className="text-[9px] text-red-400 hover:text-red-300 font-bold disabled:opacity-30"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================
+// MAIN PLANNER DASHBOARD
+// ============================================================
+
 export default function PlannerDashboard() {
   const [rows, setRows] = useState<PlannerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
   const [radarOpen, setRadarOpen] = useState(false);
-  const [, setTick] = useState(0);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("trips");
 
-  // NEW: expanded trip + custody log
   const [expandedTripId, setExpandedTripId] = useState<string | null>(null);
   const [custodyByTrip, setCustodyByTrip] = useState<
     Record<string, { asset_serial: string; state: string; custody_history: any[] }[]>
@@ -102,12 +598,9 @@ export default function PlannerDashboard() {
       return;
     }
     setExpandedTripId(manifestGroupId);
-    // Fetch fresh custody for the trip
     await loadCustodyForTrip(manifestGroupId);
   };
 
-  // Auto-refresh the expanded trip's custody log every 5 seconds.
-  // This keeps the planner's view in sync with the workers' actions.
   useEffect(() => {
     if (!expandedTripId) return;
     const id = setInterval(() => {
@@ -116,8 +609,8 @@ export default function PlannerDashboard() {
     return () => clearInterval(id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expandedTripId]);
+
   const loadRows = async () => {
-    // 1. Fetch every manifest
     const { data: manifests, error } = await supabase
       .from("manifests")
       .select("manifest_group_id, driver_name, inspector_name, priority")
@@ -130,7 +623,6 @@ export default function PlannerDashboard() {
 
     const manifestIds = manifests.map((m) => m.manifest_group_id);
 
-    // 2. Fetch all assets for those manifests
     const { data: assets } = await supabase
       .from("assets")
       .select(
@@ -138,28 +630,21 @@ export default function PlannerDashboard() {
       )
       .in("manifest_group_id", manifestIds);
 
-    // 3. Group by manifest and compute representative state + delay sum
     const stateByManifest: Record<string, string> = {};
     const delayByManifest: Record<string, { f: number; t: number; s: number }> = {};
 
     (assets || []).forEach((a: any) => {
       const id = a.manifest_group_id;
-
-      // Representative state = least advanced (matches what TaskDashboard shows)
       const prev = stateByManifest[id];
       if (prev === undefined || stateRank(a.state) < stateRank(prev)) {
         stateByManifest[id] = a.state;
       }
-
-      // Delay totals — take the MAX per phase across panels, not the sum,
-      // because a delay on one panel usually reflects the trip
       if (!delayByManifest[id]) delayByManifest[id] = { f: 0, t: 0, s: 0 };
       delayByManifest[id].f = Math.max(delayByManifest[id].f, a.factory_delay_minutes || 0);
       delayByManifest[id].t = Math.max(delayByManifest[id].t, a.transit_delay_minutes || 0);
       delayByManifest[id].s = Math.max(delayByManifest[id].s, a.site_delay_minutes || 0);
     });
 
-    // 4. Build display rows
     const built: PlannerRow[] = manifests.map((m: any) => {
       const state = stateByManifest[m.manifest_group_id] || "INITIALIZED";
       const d = delayByManifest[m.manifest_group_id] || { f: 0, t: 0, s: 0 };
@@ -178,12 +663,7 @@ export default function PlannerDashboard() {
       };
     });
 
-    // Sort by priority: HIGH → MEDIUM → LOW, then by manifest ID
-    const priorityRank: Record<string, number> = {
-      HIGH: 0,
-      MEDIUM: 1,
-      LOW: 2,
-    };
+    const priorityRank: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
     built.sort((a, b) => {
       const ra = priorityRank[a.priority] ?? 99;
       const rb = priorityRank[b.priority] ?? 99;
@@ -196,26 +676,17 @@ export default function PlannerDashboard() {
     setLoading(false);
   };
 
-  // Initial load
   useEffect(() => {
     loadRows();
   }, []);
-    // Live clock — re-render every second so "Updated Xs ago" stays fresh
-  useEffect(() => {
-    const interval = setInterval(() => setTick((t) => t + 1), 1000);
-    return () => clearInterval(interval);
-  }, []);
 
-  // Realtime subscription — re-fetch on any change to manifests or assets
   const channelRef = useRef<RealtimeChannel | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Debounce rapid-fire events (multi-row updates fire one event per row)
     const scheduleRefresh = () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => {
-        console.log("[Planner] Realtime change detected → refreshing table");
         loadRows();
       }, 400);
     };
@@ -232,9 +703,7 @@ export default function PlannerDashboard() {
         { event: "*", schema: "public", table: "assets" },
         scheduleRefresh
       )
-      .subscribe((status) => {
-        console.log("[Planner] Realtime subscription status:", status);
-      });
+      .subscribe();
 
     channelRef.current = channel;
 
@@ -265,10 +734,7 @@ export default function PlannerDashboard() {
         <div className="flex items-center gap-2">
           <span className="text-xl">📊</span>
           <span className="text-xs font-black tracking-widest text-purple-300 uppercase">
-            All Active Trips
-          </span>
-          <span className="text-[9px] text-purple-400/60 font-mono">
-            ({rows.length})
+            Planner Dashboard
           </span>
           <span className="flex items-center gap-1 ml-2 px-2 py-0.5 rounded-full bg-green-950/40 border border-green-800/60">
             <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
@@ -278,172 +744,201 @@ export default function PlannerDashboard() {
           </span>
         </div>
         <div className="flex items-center gap-3">
-          {lastRefresh && (
+          {activeTab === "trips" && lastRefresh && (
             <button
               onClick={loadRows}
               title="Force sync"
-              className="text-[9px] text-slate-500 hover:text-cyan-400 font-mono transition flex items-center gap-1"
+              className="text-[9px] text-slate-500 hover:text-cyan-400 font-mono transition"
             >
               Updated{" "}
               {(() => {
-                const secs = Math.max(0, Math.round((Date.now() - lastRefresh.getTime()) / 1000));
+                const secs = Math.max(
+                  0,
+                  Math.round((Date.now() - lastRefresh.getTime()) / 1000)
+                );
                 if (secs < 60) return `${secs}s ago`;
                 const mins = Math.round(secs / 60);
                 if (mins < 60) return `${mins}m ago`;
                 return `${Math.round(mins / 60)}h ago`;
-              })()}
-              <span className="opacity-60">⟳</span>
+              })()}{" "}
+              ⟳
             </button>
           )}
           <button
             onClick={() => setRadarOpen(true)}
             className="text-[9px] bg-cyan-600 hover:bg-cyan-500 border border-cyan-500 text-slate-950 px-3 py-1 rounded font-black uppercase tracking-wider transition"
           >
-            🛰️ Launch Fleet Radar
+            🛰️ Fleet Radar
           </button>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-slate-800/60 text-[9px] uppercase tracking-wider text-slate-500 font-bold">
-              <th className="text-left px-4 py-2">Trip</th>
-              <th className="text-left px-4 py-2">Status</th>
-              <th className="text-left px-4 py-2">Delays</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const isExpanded = expandedTripId === r.manifest_group_id;
-              const custody = custodyByTrip[r.manifest_group_id] || [];
-              const isLoading = custodyLoading === r.manifest_group_id;
+      {/* Tab bar */}
+      <div className="flex border-b border-slate-800 bg-slate-950">
+        <button
+          onClick={() => setActiveTab("trips")}
+          className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition ${
+            activeTab === "trips"
+              ? "text-cyan-400 border-b-2 border-cyan-500 bg-slate-900/60"
+              : "text-slate-500 hover:text-slate-300"
+          }`}
+        >
+          📊 Trips ({rows.length})
+        </button>
+        <button
+          onClick={() => setActiveTab("contacts")}
+          className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition ${
+            activeTab === "contacts"
+              ? "text-cyan-400 border-b-2 border-cyan-500 bg-slate-900/60"
+              : "text-slate-500 hover:text-slate-300"
+          }`}
+        >
+          👥 Contacts
+        </button>
+        <button
+          onClick={() => setActiveTab("vehicles")}
+          className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition ${
+            activeTab === "vehicles"
+              ? "text-cyan-400 border-b-2 border-cyan-500 bg-slate-900/60"
+              : "text-slate-500 hover:text-slate-300"
+          }`}
+        >
+          🚛 Vehicles
+        </button>
+      </div>
 
-              return (
-                <React.Fragment key={r.manifest_group_id}>
-                  <tr
-                    onClick={() => handleToggleTrip(r.manifest_group_id)}
-                    className="border-b border-slate-900 hover:bg-slate-900/60 transition cursor-pointer"
-                  >
-                    <td className="px-4 py-2.5 font-mono text-slate-200 text-[10px]">
-                      <span className="inline-flex items-center gap-2">
-                        <span className="text-cyan-500 text-[10px]">
-                          {isExpanded ? "▼" : "▶"}
-                        </span>
-                        {r.manifest_group_id}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <span
-                        className={`inline-block text-[9px] px-2 py-1 rounded font-bold border ${r.status_color}`}
+      {/* Tab content */}
+      <div className="p-3">
+        {activeTab === "trips" && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-800/60 text-[9px] uppercase tracking-wider text-slate-500 font-bold">
+                  <th className="text-left px-4 py-2">Trip Ref</th>
+                  <th className="text-left px-4 py-2">Status</th>
+                  <th className="text-left px-4 py-2">Delay Class</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const isExpanded = expandedTripId === r.manifest_group_id;
+                  const custody = custodyByTrip[r.manifest_group_id] || [];
+                  const isLoading = custodyLoading === r.manifest_group_id;
+
+                  return (
+                    <React.Fragment key={r.manifest_group_id}>
+                      <tr
+                        onClick={() => handleToggleTrip(r.manifest_group_id)}
+                        className="border-b border-slate-900 hover:bg-slate-900/60 transition cursor-pointer"
                       >
-                        {r.status_label}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <span
-                        className={`inline-block text-[9px] px-2 py-1 rounded font-bold border border-slate-800 ${r.delay_color}`}
-                      >
-                        {r.delay_label}
-                      </span>
-                      {r.total_delay_minutes > 0 && (
-                        <span className="text-[8px] text-slate-500 font-mono ml-2">
-                          ({r.total_delay_minutes}m)
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-
-                  {isExpanded && (
-                    <tr className="border-b border-slate-900 bg-slate-950/60">
-                      <td colSpan={3} className="px-4 py-3">
-                        <div className="space-y-2">
-                          <div className="text-[9px] uppercase font-bold text-purple-300 tracking-widest">
-                            Custody Log
-                          </div>
-
-                          {isLoading && (
-                            <div className="text-[10px] text-slate-500 italic">
-                              Loading custody history…
-                            </div>
+                        <td className="px-4 py-2.5 font-mono text-slate-200 text-[10px]">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="text-cyan-500 text-[10px]">
+                              {isExpanded ? "▼" : "▶"}
+                            </span>
+                            {r.manifest_group_id}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span
+                            className={`inline-block text-[9px] px-2 py-1 rounded font-bold border ${r.status_color}`}
+                          >
+                            {r.status_label}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5">
+                          <span
+                            className={`inline-block text-[9px] px-2 py-1 rounded font-bold border border-slate-800 ${r.delay_color}`}
+                          >
+                            {r.delay_label}
+                          </span>
+                          {r.total_delay_minutes > 0 && (
+                            <span className="text-[8px] text-slate-500 font-mono ml-2">
+                              ({r.total_delay_minutes}m)
+                            </span>
                           )}
+                        </td>
+                      </tr>
 
-                          {!isLoading && custody.length === 0 && (
-                            <div className="text-[10px] text-slate-500 italic">
-                              No panels yet.
-                            </div>
-                          )}
-
-                          {!isLoading && custody.length > 0 && (() => {
-                            // Pick the "least advanced" panel — same rule the
-                            // worker view uses to determine the trip's current
-                            // custody stamp.
-                            const stateRank = (s: string): number => {
-                              if (!s) return 0;
-                              if (s.startsWith("REJECTED")) return -1;
-                              if (s === "INITIALIZED") return 0;
-                              if (s === "LOADING_INITIATED") return 1;
-                              if (s === "LOADING_COMPLETED") return 2;
-                              if (s.startsWith("DISPATCHED")) return 3;
-                              if (s === "ARRIVED_AT_GATE") return 4;
-                              if (s.startsWith("RECEIVED_ON_SITE")) return 5;
-                              if (s === "GATE_IN_OFFLOADING") return 6;
-                              if (s === "OFFLOADING_COMPLETED") return 7;
-                              if (s === "INSTALLATION_INITIATED") return 8;
-                              if (s === "INSTALLATION_COMPLETED") return 9;
-                              return 0;
-                            };
-                            const focusPanel = [...custody].sort(
-                              (a, b) => stateRank(a.state) - stateRank(b.state)
-                            )[0];
-
-                            return (
-                               <div className="bg-slate-900/60 border border-slate-800 rounded p-2">
-                                <div className="space-y-0.5 font-mono text-[9px] text-slate-400">
-                                  {(focusPanel.custody_history || []).map(
-                                    (log: any, i: number) => {
-                                      const ts = log.timestamp;
-                                      const displayTs =
-                                        ts &&
-                                        ts.trim() !== "" &&
-                                        ts !== "[PENDING HARDWARE SCAN]"
-                                          ? ts
-                                          : "—";
-                                      return (
-                                        <div
-                                          key={i}
-                                          className="flex justify-between gap-3"
-                                        >
-                                          <span className="truncate">
-                                            [{displayTs}] {log.state}
-                                          </span>
-                                          <span className="text-cyan-500 shrink-0">
-                                            → {log.custody}
-                                          </span>
-                                        </div>
-                                      );
-                                    }
-                                  )}
-                                </div>
+                      {isExpanded && (
+                        <tr className="border-b border-slate-900 bg-slate-950/60">
+                          <td colSpan={3} className="px-4 py-3">
+                            <div className="space-y-2">
+                              <div className="text-[9px] uppercase font-bold text-purple-300 tracking-widest">
+                                Custody Log
                               </div>
-                            );
-                          })()}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </tbody>
-        </table>
 
-        {rows.length === 0 && (
-          <div className="text-center py-8 text-xs text-slate-500 italic">
-            No trips found in the database.
+                              {isLoading && (
+                                <div className="text-[10px] text-slate-500 italic">
+                                  Loading custody history…
+                                </div>
+                              )}
+
+                              {!isLoading && custody.length === 0 && (
+                                <div className="text-[10px] text-slate-500 italic">
+                                  No panels yet.
+                                </div>
+                              )}
+
+                              {!isLoading &&
+                                custody.length > 0 &&
+                                (() => {
+                                  const focusPanel = [...custody].sort(
+                                    (a, b) =>
+                                      stateRank(a.state) - stateRank(b.state)
+                                  )[0];
+
+                                  return (
+                                    <div className="bg-slate-900/60 border border-slate-800 rounded p-2">
+                                      <div className="space-y-0.5 font-mono text-[9px] text-slate-400">
+                                        {(focusPanel.custody_history || []).map(
+                                          (log: any, i: number) => {
+                                            const ts = log.timestamp;
+                                            const displayTs =
+                                              ts &&
+                                              ts.trim() !== "" &&
+                                              ts !== "[PENDING HARDWARE SCAN]"
+                                                ? ts
+                                                : "—";
+                                            return (
+                                              <div
+                                                key={i}
+                                                className="flex justify-between gap-3"
+                                              >
+                                                <span className="truncate">
+                                                  [{displayTs}] {log.state}
+                                                </span>
+                                                <span className="text-cyan-500 shrink-0">
+                                                  → {log.custody}
+                                                </span>
+                                              </div>
+                                            );
+                                          }
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+              </tbody>
+            </table>
+
+            {rows.length === 0 && (
+              <div className="text-center py-8 text-xs text-slate-500 italic">
+                No trips found in the database.
+              </div>
+            )}
           </div>
         )}
+
+        {activeTab === "contacts" && <ContactsTab />}
+        {activeTab === "vehicles" && <VehiclesTab />}
       </div>
 
       {/* Footer */}
@@ -451,7 +946,6 @@ export default function PlannerDashboard() {
         Live updates via Supabase Realtime · Powered by SOKRAT
       </div>
 
-      {/* Fleet Radar overlay (top-level modal) */}
       <FleetRadar isOpen={radarOpen} onClose={() => setRadarOpen(false)} />
     </div>
   );
