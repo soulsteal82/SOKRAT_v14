@@ -1075,7 +1075,7 @@ export default function PlannerDashboard() {
         </div>
       </div>
 
-      {/* Tab bar */}
+       {/* Tab bar */}
       <div className="flex border-b border-slate-800 bg-slate-950">
         <button
           onClick={() => setActiveTab("trips")}
@@ -1087,27 +1087,31 @@ export default function PlannerDashboard() {
         >
           📊 Trips ({rows.length})
         </button>
-        <button
-          onClick={() => setActiveTab("contacts")}
-          className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition ${
-            activeTab === "contacts"
-              ? "text-cyan-400 border-b-2 border-cyan-500 bg-slate-900/60"
-              : "text-slate-500 hover:text-slate-300"
-          }`}
-        >
-          👥 Contacts
-        </button>
-        <button
-          onClick={() => setActiveTab("vehicles")}
-          className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition ${
-            activeTab === "vehicles"
-              ? "text-cyan-400 border-b-2 border-cyan-500 bg-slate-900/60"
-              : "text-slate-500 hover:text-slate-300"
-          }`}
-        >
-          🚛 Vehicles
-        </button>
-                {isVendor && (
+        {isDemoMode && (
+          <button
+            onClick={() => setActiveTab("contacts")}
+            className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition ${
+              activeTab === "contacts"
+                ? "text-cyan-400 border-b-2 border-cyan-500 bg-slate-900/60"
+                : "text-slate-500 hover:text-slate-300"
+            }`}
+          >
+            👥 Contacts
+          </button>
+        )}
+        {isDemoMode && (
+          <button
+            onClick={() => setActiveTab("vehicles")}
+            className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition ${
+              activeTab === "vehicles"
+                ? "text-cyan-400 border-b-2 border-cyan-500 bg-slate-900/60"
+                : "text-slate-500 hover:text-slate-300"
+            }`}
+          >
+            🚛 Vehicles
+          </button>
+        )}
+        {isVendor && (
           <button
             onClick={() => setActiveTab("billing")}
             className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition ${
@@ -1251,8 +1255,8 @@ export default function PlannerDashboard() {
           </div>
         )}
 
-        {activeTab === "contacts" && <ContactsTab />}
-        {activeTab === "vehicles" && <VehiclesTab />}
+        {activeTab === "contacts" && isDemoMode && <ContactsTab />}
+        {activeTab === "vehicles" && isDemoMode && <VehiclesTab />}
                 {activeTab === "billing" && isVendor && <BillingTab />}
       </div>
 
