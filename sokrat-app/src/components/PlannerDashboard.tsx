@@ -759,8 +759,11 @@ export default function PlannerDashboard() {
   // T4.31 — vendor-only Billing tab gate
   // TODO(T4.35): replace with role === "VENDOR_ADMIN"
   const { profile: userProfile } = useAuth();
-  const isVendor = userProfile?.email === "planner@sokrat.systems";
-  
+  const isDemoMode =
+    typeof window !== "undefined" &&
+    window.location.search.includes("demo=1");
+  const isVendor =
+    userProfile?.email === "planner@sokrat.systems" && isDemoMode;  
   const [rows, setRows] = useState<PlannerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
