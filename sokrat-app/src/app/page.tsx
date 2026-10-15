@@ -182,11 +182,21 @@ const PRECAST_DELAY_REASONS = [
   "Safety Stoppage"
 ];
 
-const DEFECT_VECTORS = [
+// Dispatcher rejects at factory — quality/manufacturing issues
+const DISPATCHER_DEFECT_VECTORS = [
   "No Defects",
   "Dimensions",
   "Cracks",
   "Honeycombing"
+];
+
+// Inspector rejects at site — delivery/receipt issues
+const INSPECTOR_DEFECT_VECTORS = [
+  "No Defects",
+  "Wrong number of panels",
+  "Dimensions",
+  "Cracks",
+  "Damaged in transit"
 ];
 
 const TRAILER_TYPES = ["FLATBED", "LOWBOY", "STEP_DECK", "REMOVABLE_GOOSENECK"];
@@ -347,12 +357,12 @@ export default function Home() {
 
   // Map state
 
-  const [selectedDispatcherDefect, setSelectedDispatcherDefect] = useState(DEFECT_VECTORS[0]);
+const [selectedDispatcherDefect, setSelectedDispatcherDefect] = useState(DISPATCHER_DEFECT_VECTORS[0]);
     const [enrichedInspectorPhone, setEnrichedInspectorPhone] = useState<string | null>(null);
   const [enrichedInspectorEmployer, setEnrichedInspectorEmployer] = useState<string | null>(null);
     const [hasPendingLocationRequest, setHasPendingLocationRequest] = useState(false);
   const [locationRequestBusy, setLocationRequestBusy] = useState(false);
-  const [selectedInspectorDefect, setSelectedInspectorDefect] = useState(DEFECT_VECTORS[0]);
+const [selectedInspectorDefect, setSelectedInspectorDefect] = useState(INSPECTOR_DEFECT_VECTORS[0]);
   const [dispatcherRejectFiles, setDispatcherRejectFiles] = useState<File[]>([]);
   // Check for pending location requests on the current manifest.
   // Runs every 5 seconds while a task is open, so the inspector
@@ -1822,8 +1832,8 @@ onClick={() => {
             Reason for Rejection (If Any):
           </span>
           <div className="grid grid-cols-2 gap-2">
-            {DEFECT_VECTORS.map((defect) => (
-              <label
+            {DISPATCHER_DEFECT_VECTORS.map((defect) => (
+                          <label
                 key={defect}
                 className={`flex items-center gap-2 p-1.5 rounded border text-xs cursor-pointer select-none transition ${
                   selectedDispatcherDefect === defect
@@ -2699,8 +2709,8 @@ Status:
                       If rejecting, choose a reason:
                     </span>
                     <div className="grid grid-cols-2 gap-2">
-                      {DEFECT_VECTORS.map((defect) => (
-                        <label
+                      {INSPECTOR_DEFECT_VECTORS.map((defect) => (
+                                              <label
                           key={defect}
                           className={`flex items-center gap-2 p-1.5 rounded border text-xs cursor-pointer select-none transition ${
                             selectedInspectorDefect === defect
