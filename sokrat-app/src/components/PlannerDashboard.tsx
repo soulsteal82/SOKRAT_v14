@@ -93,7 +93,8 @@ type BillingRow = {
 
 function BillingTab() {
   const [rows, setRows] = React.useState<BillingRow[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  const panelCountByManifestRef = React.useRef<Record<string, number>>({});
+    const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [expandedMonth, setExpandedMonth] = React.useState<string | null>(null);
   const [tripsByMonth, setTripsByMonth] = React.useState<
@@ -137,6 +138,7 @@ function BillingTab() {
         panelCountByManifest[a.manifest_group_id] =
           (panelCountByManifest[a.manifest_group_id] || 0) + 1;
       });
+      panelCountByManifestRef.current = panelCountByManifest;
 
       const byMonth: Record<string, BillingRow> = {};
       const tripLists: Record<
@@ -180,17 +182,42 @@ function BillingTab() {
   }, []);
 
   const downloadCsv = () => {
-    const header = "month,trip_count,panel_count\n";
-    const body = rows
-      .map((r) => `${r.month},${r.trip_count},${r.panel_count}`)
-      .join("\n");
+    const csvEscape = (v: string) => {
+      if (v == null) return "";
+      const s = String(v);
+      if (s.includes(",") || s.includes('"') || s.includes("\n")) {
+        return `"${s.replace(/"/g, '""')}"`;
+      }
+      return s;
+    };
+
+    const header = "month,trip_ref,dispatched_at,panel_count,site_name\n";
+
+    const lines: string[] = [];
+    rows.forEach((r) => {
+      const trips = tripsByMonth[r.month] || [];
+      trips.forEach((t) => {
+        const panelCount = panelCountByManifestRef.current[t.ref] || 0;
+        lines.push(
+          [
+            csvEscape(r.month),
+            csvEscape(t.ref),
+            csvEscape(t.dispatched_at),
+            String(panelCount),
+            csvEscape(t.site_name ?? ""),
+          ].join(",")
+        );
+      });
+    });
+
+    const body = lines.join("\n");
     const blob = new Blob([header + body], {
       type: "text/csv;charset=utf-8;",
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `sokrat-billing-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.download = `sokrat-billing-detail-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   };
