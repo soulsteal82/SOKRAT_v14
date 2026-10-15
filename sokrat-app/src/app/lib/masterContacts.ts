@@ -185,6 +185,8 @@ export async function createContact(params: {
     email: params.email,
     employer: params.employer,
     created_by: userId,
+    // T4.59d — hardcoded tenant until T4.52 multi-tenancy migration
+    tenant_id: "GULF_PRECA",
   });
 
   if (error) {
@@ -266,6 +268,8 @@ export async function createVehicle(params: {
     trailer_type: params.trailer_type,
     ownership: params.ownership,
     created_by: userId,
+    // T4.59d — hardcoded tenant until T4.52 multi-tenancy migration
+    tenant_id: "GULF_PRECA",
   });
 
   if (error) {
