@@ -95,21 +95,27 @@ function BillingTab() {
   const [rows, setRows] = React.useState<BillingRow[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [expandedMonth, setExpandedMonth] = React.useState<string | null>(null);
+  const [tripsByMonth, setTripsByMonth] = React.useState<
+    Record<string, { ref: string; dispatched_at: string; site_name: string | null }[]>
+  >({});
 
   const load = async () => {
     setLoading(true);
     setError(null);
     try {
-      // Pull every dispatched manifest with a real dispatched_at.
       const { data: manifests, error: mErr } = await supabase
         .from("manifests")
-        .select("manifest_group_id, dispatched_at");
+        .select("manifest_group_id, dispatched_at, site_name")
+        .not("dispatched_at", "is", null);
 
       if (mErr) throw mErr;
 
-      const dispatched = (manifests || []).filter(
-        (m: any) => m.dispatched_at != null
-      );
+      const dispatched = (manifests || []) as {
+        manifest_group_id: string;
+        dispatched_at: string;
+        site_name: string | null;
+      }[];
 
       if (dispatched.length === 0) {
         setRows([]);
@@ -117,9 +123,8 @@ function BillingTab() {
         return;
       }
 
-      const ids = dispatched.map((m: any) => m.manifest_group_id);
+      const ids = dispatched.map((m) => m.manifest_group_id);
 
-      // Count panels per manifest (any asset counts as a panel).
       const { data: assets, error: aErr } = await supabase
         .from("assets")
         .select("manifest_group_id")
@@ -133,22 +138,36 @@ function BillingTab() {
           (panelCountByManifest[a.manifest_group_id] || 0) + 1;
       });
 
-      // Bucket by YYYY-MM.
       const byMonth: Record<string, BillingRow> = {};
-      dispatched.forEach((m: any) => {
-        const month = String(m.dispatched_at).slice(0, 7); // "2026-10"
+      const tripLists: Record<
+        string,
+        { ref: string; dispatched_at: string; site_name: string | null }[]
+      > = {};
+
+      dispatched.forEach((m) => {
+        const month = String(m.dispatched_at).slice(0, 7);
         if (!byMonth[month]) {
           byMonth[month] = { month, trip_count: 0, panel_count: 0 };
+          tripLists[month] = [];
         }
         byMonth[month].trip_count += 1;
-        byMonth[month].panel_count +=
-          panelCountByManifest[m.manifest_group_id] || 0;
+        byMonth[month].panel_count += panelCountByManifest[m.manifest_group_id] || 0;
+        tripLists[month].push({
+          ref: m.manifest_group_id,
+          dispatched_at: m.dispatched_at,
+          site_name: m.site_name,
+        });
       });
+
+      Object.values(tripLists).forEach((list) =>
+        list.sort((a, b) => a.dispatched_at.localeCompare(b.dispatched_at))
+      );
 
       const sorted = Object.values(byMonth).sort((a, b) =>
         b.month.localeCompare(a.month)
       );
       setRows(sorted);
+      setTripsByMonth(tripLists);
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
@@ -174,6 +193,21 @@ function BillingTab() {
     a.download = `sokrat-billing-${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
+  };
+
+  const formatMonth = (iso: string) => {
+    const [y, m] = iso.split("-");
+    const names = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${names[parseInt(m, 10) - 1]}-${y}`;
+  };
+
+  const formatDate = (iso: string) => {
+    const d = new Date(iso);
+    return d.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
   };
 
   const totalTrips = rows.reduce((s, r) => s + r.trip_count, 0);
@@ -228,22 +262,65 @@ function BillingTab() {
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr
-                    key={r.month}
-                    className="border-b border-slate-900 hover:bg-slate-900/40"
-                  >
-                    <td className="px-2 py-1.5 font-mono text-slate-200">
-                      {r.month}
-                    </td>
-                    <td className="px-2 py-1.5 text-right font-bold text-cyan-400">
-                      {r.trip_count}
-                    </td>
-                    <td className="px-2 py-1.5 text-right text-slate-400">
-                      {r.panel_count}
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((r) => {
+                  const isExpanded = expandedMonth === r.month;
+                  const trips = tripsByMonth[r.month] || [];
+                  return (
+                    <React.Fragment key={r.month}>
+                      <tr
+                        onClick={() =>
+                          setExpandedMonth(isExpanded ? null : r.month)
+                        }
+                        className="border-b border-slate-900 hover:bg-slate-900/40 cursor-pointer"
+                      >
+                        <td className="px-2 py-1.5 text-slate-200 font-bold">
+                          <span className="inline-flex items-center gap-2">
+                            <span className="text-cyan-500 text-[10px]">
+                              {isExpanded ? "▼" : "▶"}
+                            </span>
+                            {formatMonth(r.month)}
+                          </span>
+                        </td>
+                        <td className="px-2 py-1.5 text-right font-bold text-cyan-400">
+                          {r.trip_count}
+                        </td>
+                        <td className="px-2 py-1.5 text-right text-slate-400">
+                          {r.panel_count}
+                        </td>
+                      </tr>
+                      {isExpanded && (
+                        <tr className="border-b border-slate-900 bg-slate-950/60">
+                          <td colSpan={3} className="px-4 py-2">
+                            <div className="space-y-1 font-mono text-[10px]">
+                              {trips.length === 0 ? (
+                                <div className="text-slate-500 italic">
+                                  No trips in this month.
+                                </div>
+                              ) : (
+                                trips.map((t) => (
+                                  <div
+                                    key={t.ref}
+                                    className="flex justify-between gap-3 border-b border-slate-900/60 pb-1 last:border-b-0"
+                                  >
+                                    <span className="text-slate-300">
+                                      {t.ref}
+                                    </span>
+                                    <span className="text-slate-500">
+                                      {formatDate(t.dispatched_at)}
+                                    </span>
+                                    <span className="text-cyan-500 text-right max-w-[40%] truncate">
+                                      {t.site_name || "—"}
+                                    </span>
+                                  </div>
+                                ))
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
               <tfoot>
                 <tr className="border-t border-slate-700">
@@ -261,7 +338,7 @@ function BillingTab() {
             </table>
           </div>
           <div className="text-[8px] text-slate-600 italic text-center pt-1">
-            CSV export includes month, trip_count, panel_count per row.
+            Click a month to see the trip list. CSV export includes month, trip_count, panel_count per row.
           </div>
         </>
       )}
