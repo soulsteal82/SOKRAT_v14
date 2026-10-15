@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useRef } from "react";
 import { supabaseBrowser as supabase } from "@/app/lib/supabase-browser";
+import { useAuth } from "@/app/lib/auth-context";
 import { classifyDelay } from "@/app/lib/delay";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import FleetRadar from "./FleetRadar";
@@ -33,7 +34,7 @@ type PlannerRow = {
   total_delay_minutes: number;
 };
 
-type ActiveTab = "trips" | "contacts" | "vehicles";
+type ActiveTab = "trips" | "contacts" | "vehicles" | "billing";
 
 function getStatusMeta(state: string | undefined) {
   const s = state || "";
@@ -77,7 +78,196 @@ const stateRank = (s: string): number => {
   if (s === "INSTALLATION_COMPLETED") return 9;
   return 0;
 };
+// ============================================================
+// BILLING TAB — vendor-only monthly trip counter + CSV export
+// Gate: only rendered when the logged-in user's email matches
+// VENDOR_EMAIL (see PlannerDashboard below).
+// TODO(T4.35): replace email gate with role === "VENDOR_ADMIN"
+// ============================================================
 
+type BillingRow = {
+  month: string;          // "2026-10"
+  trip_count: number;
+  panel_count: number;
+};
+
+function BillingTab() {
+  const [rows, setRows] = React.useState<BillingRow[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      // Pull every dispatched manifest with a real dispatched_at.
+      const { data: manifests, error: mErr } = await supabase
+        .from("manifests")
+        .select("manifest_group_id, dispatched_at");
+
+      if (mErr) throw mErr;
+
+      const dispatched = (manifests || []).filter(
+        (m: any) => m.dispatched_at != null
+      );
+
+      if (dispatched.length === 0) {
+        setRows([]);
+        setLoading(false);
+        return;
+      }
+
+      const ids = dispatched.map((m: any) => m.manifest_group_id);
+
+      // Count panels per manifest (any asset counts as a panel).
+      const { data: assets, error: aErr } = await supabase
+        .from("assets")
+        .select("manifest_group_id")
+        .in("manifest_group_id", ids);
+
+      if (aErr) throw aErr;
+
+      const panelCountByManifest: Record<string, number> = {};
+      (assets || []).forEach((a: any) => {
+        panelCountByManifest[a.manifest_group_id] =
+          (panelCountByManifest[a.manifest_group_id] || 0) + 1;
+      });
+
+      // Bucket by YYYY-MM.
+      const byMonth: Record<string, BillingRow> = {};
+      dispatched.forEach((m: any) => {
+        const month = String(m.dispatched_at).slice(0, 7); // "2026-10"
+        if (!byMonth[month]) {
+          byMonth[month] = { month, trip_count: 0, panel_count: 0 };
+        }
+        byMonth[month].trip_count += 1;
+        byMonth[month].panel_count +=
+          panelCountByManifest[m.manifest_group_id] || 0;
+      });
+
+      const sorted = Object.values(byMonth).sort((a, b) =>
+        b.month.localeCompare(a.month)
+      );
+      setRows(sorted);
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    load();
+  }, []);
+
+  const downloadCsv = () => {
+    const header = "month,trip_count,panel_count\n";
+    const body = rows
+      .map((r) => `${r.month},${r.trip_count},${r.panel_count}`)
+      .join("\n");
+    const blob = new Blob([header + body], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `sokrat-billing-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const totalTrips = rows.reduce((s, r) => s + r.trip_count, 0);
+  const totalPanels = rows.reduce((s, r) => s + r.panel_count, 0);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+            Billing — Monthly Billable Trips
+          </div>
+          <div className="text-[9px] text-slate-500 italic mt-0.5">
+            A billable trip = a manifest with a recorded dispatch timestamp.
+          </div>
+        </div>
+        <button
+          onClick={downloadCsv}
+          disabled={rows.length === 0}
+          className="text-[10px] bg-cyan-600 hover:bg-cyan-500 disabled:bg-slate-800 disabled:text-slate-500 text-slate-950 px-3 py-1.5 rounded font-black uppercase tracking-wider transition"
+        >
+          ⬇ Export CSV
+        </button>
+      </div>
+
+      {loading && (
+        <div className="text-[10px] text-slate-500 italic">Loading…</div>
+      )}
+
+      {error && (
+        <div className="bg-red-950/30 border border-red-800 text-red-400 p-2 rounded text-[10px] font-mono">
+          ⚠️ {error}
+        </div>
+      )}
+
+      {!loading && !error && rows.length === 0 && (
+        <div className="text-[10px] text-slate-500 italic">
+          No dispatched trips yet. Once trips are dispatched, they will
+          appear here automatically.
+        </div>
+      )}
+
+      {!loading && rows.length > 0 && (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-slate-800 text-[9px] uppercase tracking-wider text-slate-500">
+                  <th className="text-left px-2 py-1.5">Month</th>
+                  <th className="text-right px-2 py-1.5">Trips</th>
+                  <th className="text-right px-2 py-1.5">Panels</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => (
+                  <tr
+                    key={r.month}
+                    className="border-b border-slate-900 hover:bg-slate-900/40"
+                  >
+                    <td className="px-2 py-1.5 font-mono text-slate-200">
+                      {r.month}
+                    </td>
+                    <td className="px-2 py-1.5 text-right font-bold text-cyan-400">
+                      {r.trip_count}
+                    </td>
+                    <td className="px-2 py-1.5 text-right text-slate-400">
+                      {r.panel_count}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t border-slate-700">
+                  <td className="px-2 py-1.5 text-[9px] uppercase font-bold text-slate-500">
+                    Total
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-black text-cyan-300">
+                    {totalTrips}
+                  </td>
+                  <td className="px-2 py-1.5 text-right font-bold text-slate-300">
+                    {totalPanels}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <div className="text-[8px] text-slate-600 italic text-center pt-1">
+            CSV export includes month, trip_count, panel_count per row.
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
 // ============================================================
 // CONTACTS TAB
 // ============================================================
@@ -566,6 +756,11 @@ function VehiclesTab() {
 // ============================================================
 
 export default function PlannerDashboard() {
+  // T4.31 — vendor-only Billing tab gate
+  // TODO(T4.35): replace with role === "VENDOR_ADMIN"
+  const { profile: userProfile } = useAuth();
+  const isVendor = userProfile?.email === "sokrates@sokrat.systems";
+
   const [rows, setRows] = useState<PlannerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -805,6 +1000,18 @@ export default function PlannerDashboard() {
         >
           🚛 Vehicles
         </button>
+                {isVendor && (
+          <button
+            onClick={() => setActiveTab("billing")}
+            className={`px-4 py-2 text-[10px] font-bold uppercase tracking-wider transition ${
+              activeTab === "billing"
+                ? "text-cyan-400 border-b-2 border-cyan-500 bg-slate-900/60"
+                : "text-slate-500 hover:text-slate-300"
+            }`}
+          >
+            💰 Billing
+          </button>
+        )}
       </div>
 
       {/* Tab content */}
@@ -939,6 +1146,7 @@ export default function PlannerDashboard() {
 
         {activeTab === "contacts" && <ContactsTab />}
         {activeTab === "vehicles" && <VehiclesTab />}
+                {activeTab === "billing" && isVendor && <BillingTab />}
       </div>
 
       {/* Footer */}
