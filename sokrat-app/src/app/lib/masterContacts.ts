@@ -263,7 +263,7 @@ export async function createVehicle(params: {
   const { data: session } = await supabase.auth.getSession();
   const userId = session?.session?.user?.id ?? null;
 
-  const { error } = await supabase.from("master_vehicles").insert({
+   const { error } = await supabase.from("master_vehicles").insert({
     plate_number: params.plate_number,
     trailer_type: params.trailer_type,
     ownership: params.ownership,
@@ -271,7 +271,7 @@ export async function createVehicle(params: {
     // T4.59d — hardcoded tenant until T4.52 multi-tenancy migration
     tenant_id: "GULF_PRECA",
   });
-
+  
   if (error) {
     console.error("[masterContacts] createVehicle failed:", error.message);
     return { success: false, error: error.message };
