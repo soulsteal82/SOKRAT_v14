@@ -196,7 +196,8 @@ const INSPECTOR_DEFECT_VECTORS = [
   "Wrong number of panels",
   "Dimensions",
   "Cracks",
-  "Damaged in transit"
+  "Damaged in transit",
+  "Missing documentation"
 ];
 
 const TRAILER_TYPES = ["FLATBED", "LOWBOY", "STEP_DECK", "REMOVABLE_GOOSENECK"];
