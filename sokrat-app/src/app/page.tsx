@@ -1247,7 +1247,7 @@ const allowed = validTransitions[currentAsset?.state || ""] || [];
   }
 
   // transitionAllAssets with dispatched defect info
-  function transitionAllAssets(nextState: string, customFields?: Partial<Asset>) {
+async function transitionAllAssets(nextState: string, customFields?: Partial<Asset>) {
     setError(null);
     try {
       if ((nextState === "INSTALLATION_INITIATED" || nextState === "INSTALLATION_COMPLETED") && !manifest.geofence_verified) {
@@ -1279,6 +1279,28 @@ const allowed = validTransitions[currentAsset?.state || ""] || [];
       if (nextState === "INSTALLATION_COMPLETED") {
 updatedFields.installation_completed_timestamp = new Date().toISOString();
   updatedFields.installed_timestamp = new Date().toISOString();
+      }
+            // ============================================
+      // Manifest-level lifecycle timestamps (T4.31 prep)
+      // ============================================
+      const nowIso = new Date().toISOString();
+      if (nextState === "LOADING_INITIATED") {
+        await saveTaskState({ loading_started_at: nowIso } as any, manifest.manifest_group_id);
+      }
+      if (nextState === "LOADING_COMPLETED") {
+        await saveTaskState({ loading_completed_at: nowIso } as any, manifest.manifest_group_id);
+      }
+      if (nextState === "DISPATCHED") {
+        await saveTaskState({ dispatched_at: nowIso } as any, manifest.manifest_group_id);
+      }
+      if (nextState === "ARRIVED_AT_GATE") {
+        await saveTaskState({ arrived_at_gate_at: nowIso } as any, manifest.manifest_group_id);
+      }
+      if (nextState.startsWith("RECEIVED_ON_SITE")) {
+        await saveTaskState({ received_on_site_at: nowIso } as any, manifest.manifest_group_id);
+      }
+      if (nextState === "INSTALLATION_COMPLETED") {
+        await saveTaskState({ installation_completed_at: nowIso } as any, manifest.manifest_group_id);
       }
 
       setAssets(prev => {
@@ -1426,6 +1448,13 @@ const saveTaskState = async (
     delivery_note_file_name: string | null;
     delivery_note_uploaded_at: string | null;
     current_stage: number;
+    loading_started_at: string | null;
+    loading_completed_at: string | null;
+    qc_completed_at: string | null;
+    dispatched_at: string | null;
+    arrived_at_gate_at: string | null;
+    received_on_site_at: string | null;
+    installation_completed_at: string | null;
   }>,
   manifestIdOverride?: string
 ) => {
