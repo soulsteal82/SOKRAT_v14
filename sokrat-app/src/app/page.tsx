@@ -263,6 +263,9 @@ export default function Home() {
   const [deliveryNoteFile, setDeliveryNoteFile] = useState<File | null>(null);
   const [deliveryNoteFileName, setDeliveryNoteFileName] = useState<string>("");
 
+  // T4.61 — Signed DN capture state (inspector)
+  const [signedDnBusy, setSignedDnBusy] = useState(false);
+
   const [manifest, setManifest] = useState<LogisticalManifest>({
     manifest_group_id: "ICAD-YAS-ALM-260706-042",
     fleet_carrier_id: "AL FARIS HEAVY LOGISTICS",
@@ -857,6 +860,77 @@ function getAssetCustody(state: string | null | undefined, selectedTask?: any): 
     }
   };
 
+  // ============================================
+  // T4.61 — Inspector: capture signed delivery note
+  // ============================================
+  const handleSignedDnCapture = async (file: File) => {
+    if (!file) return;
+    setSignedDnBusy(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const now = new Date().toISOString();
+
+      // 1. Save to manifests row
+      const { error } = await supabase
+        .from("manifests")
+        .update({
+          delivery_note_url: base64,
+          delivery_note_file_name: file.name,
+          delivery_note_uploaded_at: now,
+        })
+        .eq("manifest_group_id", manifest.manifest_group_id);
+
+      if (error) throw error;
+
+      // 2. Update local manifest state
+      setManifest((prev) => ({
+        ...prev,
+        delivery_note_url: base64,
+        delivery_note_file_name: file.name,
+      }));
+
+      // 3. Determine first-capture vs recapture
+      const isRecapture = !!currentAsset?.custodyHistory?.some(
+        (log) =>
+          log.state === "SIGNED_DN_CAPTURED" ||
+          log.state === "SIGNED_DN_RECAPTURED"
+      );
+      const custodyState = isRecapture
+        ? "SIGNED_DN_RECAPTURED"
+        : "SIGNED_DN_CAPTURED";
+
+      // 4. Append custody entry to every asset in the manifest
+      setAssets((prev) => {
+        const updated = prev.map((a) => {
+          const next = {
+            ...a,
+            custodyHistory: [
+              ...a.custodyHistory,
+              {
+                timestamp: getFormattedTimestamp(),
+                state: custodyState,
+                custody: "CONSTRUCTION SITE (Inspector)",
+              },
+            ],
+          };
+          saveAssetState(next.id, next);
+          return next;
+        });
+        return updated;
+      });
+
+      alert(
+        `✅ Signed delivery note captured.\n\nFile: ${file.name}\nThis is now attached to trip ${manifest.manifest_group_id}.`
+      );
+    } catch (err: any) {
+      setError(
+        "Failed to capture signed DN: " + (err?.message ?? String(err))
+      );
+    } finally {
+      setSignedDnBusy(false);
+    }
+  };
+
   // Clear Delivery Note
   const clearDeliveryNote = () => {
     setDeliveryNoteFile(null);
@@ -866,7 +940,7 @@ function getAssetCustody(state: string | null | undefined, selectedTask?: any): 
       delivery_note_url: null,
       delivery_note_file_name: null
     }));
-        // Save to Supabase
+    // Save to Supabase
     saveTaskState({
       delivery_note_url: null,
       delivery_note_file_name: null,
@@ -1350,7 +1424,8 @@ const saveTaskState = async (
     mix2_url: string | null;
     delivery_note_url: string | null;
     delivery_note_file_name: string | null;
-    current_stage: number;  // ← Add this
+    delivery_note_uploaded_at: string | null;
+    current_stage: number;
   }>,
   manifestIdOverride?: string
 ) => {
@@ -2603,6 +2678,100 @@ Status:
   >
     📋 View Delivery Note
   </button>
+)}
+
+{/* T4.61 — Capture signed DN — visible after Received & Approved */}
+{currentAsset?.state &&
+ (currentAsset.state.startsWith("RECEIVED_ON_SITE") ||
+  currentAsset.state === "GATE_IN_OFFLOADING" ||
+  currentAsset.state === "OFFLOADING_COMPLETED" ||
+  currentAsset.state === "INSTALLATION_INITIATED" ||
+  currentAsset.state === "INSTALLATION_COMPLETED") && (
+  <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg space-y-2">
+    {!manifest.delivery_note_url ||
+    !manifest.delivery_note_url.startsWith("data:image") ? (
+      <>
+        <span className="block text-[8px] text-slate-400 uppercase font-bold">
+          📷 Capture Signed Delivery Note
+        </span>
+        <p className="text-[9px] text-slate-500 italic">
+          Photograph the delivery note after both inspector and driver have
+          signed it.
+        </p>
+        <label
+          className={`block w-full text-center font-bold p-3 rounded text-xs uppercase tracking-wider cursor-pointer transition ${
+            signedDnBusy
+              ? "bg-slate-800 text-slate-500 cursor-not-allowed"
+              : "bg-amber-600 hover:bg-amber-500 text-slate-950"
+          }`}
+        >
+          {signedDnBusy ? "⏳ Uploading…" : "📷 Capture Signed DN"}
+          <input
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            disabled={signedDnBusy}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) handleSignedDnCapture(f);
+              e.target.value = "";
+            }}
+          />
+        </label>
+      </>
+    ) : (
+      <>
+        <span className="block text-[8px] text-slate-400 uppercase font-bold">
+          ✅ Signed DN Captured
+        </span>
+        <div className="relative w-full border border-slate-700 rounded overflow-hidden">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={manifest.delivery_note_url}
+            alt="Signed Delivery Note"
+            className="w-full max-h-48 object-contain bg-slate-900"
+          />
+        </div>
+        {manifest.delivery_note_file_name && (
+          <div className="text-[9px] text-slate-500 font-mono truncate">
+            {manifest.delivery_note_file_name}
+          </div>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <a
+            href={manifest.delivery_note_url}
+            target="_blank"
+            rel="noreferrer"
+            className="block text-center bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 font-bold p-2 rounded text-xs uppercase tracking-wider transition"
+          >
+            📷 View Full
+          </a>
+          <label
+            className={`block text-center font-bold p-2 rounded text-xs uppercase tracking-wider cursor-pointer transition ${
+              signedDnBusy
+                ? "bg-slate-800 text-slate-500 cursor-not-allowed"
+                : "bg-amber-950 hover:bg-amber-900 text-amber-300 border border-amber-900"
+            }`}
+          >
+            {signedDnBusy ? "⏳ Retaking…" : "🔄 Retake"}
+            <input
+              type="file"
+              accept="image/*"
+              capture="environment"
+              className="hidden"
+              disabled={signedDnBusy}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleSignedDnCapture(f);
+                e.target.value = "";
+              }}
+            />
+          </label>
+        </div>
+      </>
+    )}
+  </div>
 )}
                   <div className="bg-slate-950 p-2.5 border border-slate-800 rounded-lg text-xs space-y-1.5">
   {/* Compute document presence + scan state once, so both the checkbox
