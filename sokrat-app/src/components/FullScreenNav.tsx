@@ -402,7 +402,7 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
                       <span className="text-xl mt-0.5 shrink-0">{icon}</span>
                       <div className="flex-1 min-w-0">
                         <div
-                          className={`text-xs ${
+                          className={`text-base ${
                             isCurrent
                               ? "text-cyan-200 font-bold"
                               : "text-slate-200"
@@ -411,7 +411,7 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
                           {step.instruction}
                         </div>
                         {distKm && (
-                          <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                          <div className="text-xs text-slate-500 font-mono mt-0.5">
                             {isCurrent ? "In " : ""}
                             {distKm} km
                           </div>
@@ -569,11 +569,11 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
                   : "⬆️"}
               </span>
               <div className="flex-1">
-                <div className="text-sm text-slate-100 font-bold">
+                <div className="text-2xl text-slate-100 font-bold leading-tight">
                   {route.steps[0].instruction}
                 </div>
                 {route.steps[0].distanceMeters > 0 && (
-                  <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                  <div className="text-sm text-cyan-500 font-mono mt-1 font-bold">
                     in {(route.steps[0].distanceMeters / 1000).toFixed(1)} km
                   </div>
                 )}
