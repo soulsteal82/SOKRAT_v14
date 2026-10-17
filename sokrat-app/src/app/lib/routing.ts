@@ -29,7 +29,7 @@ export type RouteResult = {
 
 // Public OSRM demo server (free, no key)
 const OSRM_BASE = "https://router.project-osrm.org";
-const OSRM_TIMEOUT_MS = 3000;
+const OSRM_TIMEOUT_MS = 10000;
 
 // ------------------------------------------------------------
 // Fallback route (ICAD → Yas Island) used if OSRM fails.
