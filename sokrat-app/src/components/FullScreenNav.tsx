@@ -408,7 +408,14 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
                               : "text-slate-200"
                           }`}
                         >
-                          {step.instruction}
+                          {(() => {
+                            let txt = step.instruction;
+                            if (/[\u0600-\u06FF]/.test(txt)) {
+                              txt = txt.replace(/(?:onto|to|on|via)\s+.*/, "").trim();
+                              if (!txt) txt = "Continue on route";
+                            }
+                            return txt;
+                          })()}
                         </div>
                         {distKm && (
                           <div className="text-xs text-slate-500 font-mono mt-0.5">
@@ -570,7 +577,15 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
               </span>
               <div className="flex-1">
                 <div className="text-2xl text-slate-100 font-bold leading-tight">
-                  {route.steps[0].instruction}
+                  {(() => {
+                    // Remove Arabic characters. If it says "onto [Arabic]", strip the "onto [Arabic]"
+                    let txt = route.steps[0].instruction;
+                    if (/[\u0600-\u06FF]/.test(txt)) {
+                      txt = txt.replace(/(?:onto|to|on|via)\s+.*/, "").trim();
+                      if (!txt) txt = "Continue on route";
+                    }
+                    return txt;
+                  })()}
                 </div>
                 {route.steps[0].distanceMeters > 0 && (
                   <div className="text-sm text-cyan-500 font-mono mt-1 font-bold">
