@@ -61,12 +61,33 @@ const FitBounds = dynamic(
     }),
   { ssr: false }
 );
-
+const FollowDriver = dynamic(
+  () =>
+    import("react-leaflet").then((m) => {
+      const { useMap } = m as any;
+      return function FollowDriverInner({
+        lat,
+        lng,
+      }: {
+        lat: number;
+        lng: number;
+      }) {
+        const map = useMap();
+        useEffect(() => {
+          if (!map || !lat || !lng) return;
+          map.setView([lat, lng], 17, { animate: true });
+        }, [map, lat, lng]);
+        return null;
+      };
+    }),
+  { ssr: false }
+);
 type Props = {
   isOpen: boolean;
   onClose: () => void;
   driverLat: number | null;
   driverLng: number | null;
+  driverHeading?: number | null;
   siteLat: number | null;
   siteLng: number | null;
   siteName: string;
@@ -91,6 +112,7 @@ export default function FullScreenNav({
   onClose,
   driverLat,
   driverLng,
+  driverHeading,
   siteLat,
   siteLng,
   siteName,
@@ -110,6 +132,14 @@ export default function FullScreenNav({
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [traffic, setTraffic] = useState<TrafficSegment[]>([]);
   const [loading, setLoading] = useState(false);
+
+  // Rotate the driver arrow based on heading
+  useEffect(() => {
+    const el = document.getElementById("sokrat-driver-arrow");
+    if (el && driverHeading != null) {
+      el.style.transform = `rotate(${driverHeading}deg)`;
+    }
+  }, [driverHeading]);
 
   // Load leaflet only in the browser
   useEffect(() => {
@@ -420,18 +450,10 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
             scrollWheelZoom={true}
             dragging={true}
             zoomControl={true}
-          >            <FitBounds
-              points={
-                [
-                  driverLat != null && driverLng != null
-                    ? [driverLat, driverLng]
-                    : null,
-                  siteLat != null && siteLng != null
-                    ? [siteLat, siteLng]
-                    : null,
-                ].filter(Boolean) as [number, number][]
-              }
-            />
+          >
+            {driverLat != null && driverLng != null && (
+              <FollowDriver lat={driverLat} lng={driverLng} />
+            )}
             <TileLayer
               attribution='&copy; <a href="https://stadiamaps.com/">Stadia Maps</a> &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="http://openstreetmap.org">OpenStreetMap</a> contributors'
               url={`https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png?api_key=${process.env.NEXT_PUBLIC_STADIA_API_KEY || ""}`}
@@ -516,11 +538,11 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
           </div>
         )}
 
-        {/* Next-step bottom banner */}
+        {/* Next-step bottom banner — ENLARGED for follow mode */}
         {route && route.steps.length > 0 && (
-          <div className="absolute bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur border-t border-cyan-800/50 px-4 py-3 z-[10001]">
-                      <div className="flex items-center gap-3">
-              <span className="text-3xl text-cyan-300">
+          <div className="absolute bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur border-t-2 border-cyan-500/50 px-6 py-6 z-[10001] rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.8)]">
+            <div className="flex items-center gap-6">
+              <span className="text-6xl text-cyan-300 drop-shadow-[0_0_15px_rgba(34,211,238,0.5)]">
                 {route.steps[0].maneuver === "arrive"
                   ? "🏁"
                   : route.steps[0].maneuver.includes("left")
@@ -559,9 +581,9 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
 function rebuildIcons(leaflet: any) {
   const driverIcon = leaflet.divIcon({
     className: "custom-driver-marker",
-    html: `<div style="background:#06b6d4;width:34px;height:34px;border-radius:50%;border:3px solid white;box-shadow:0 0 16px rgba(6,182,212,1);display:flex;align-items:center;justify-content:center;font-size:16px;">🚚</div>`,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
+    html: `<div id="sokrat-driver-arrow" style="background:#06b6d4;width:36px;height:36px;border-radius:50%;border:3px solid white;box-shadow:0 0 16px rgba(6,182,212,1);display:flex;align-items:center;justify-content:center;font-size:20px;transition:transform 0.5s ease-in-out;">⬆️</div>`,
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
   });
   const siteIcon = leaflet.divIcon({
     className: "custom-site-marker",
