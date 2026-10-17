@@ -536,6 +536,7 @@ const currentAsset = assets.length > 0
           ...prev,
           driver_current_lat: manifestData.driver_current_lat,
           driver_current_lng: manifestData.driver_current_lng,
+          driver_heading: manifestData.driver_heading,
           driver_last_update: manifestData.driver_last_update,
           driver_status: manifestData.driver_status,
           site_latitude: manifestData.site_latitude,
@@ -2213,6 +2214,7 @@ disabled={!["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(cu
                   prev.driver_current_lng !== task.driver_current_lng ||
                   prev.driver_last_update !== task.driver_last_update ||
                   prev.driver_status !== task.driver_status ||
+                  (prev as any).driver_heading !== (task as any).driver_heading ||
                   prev.selected_scope !== task.selected_scope ||
                   prev.selected_defect !== task.selected_defect ||
                   prev.delivery_note_url !== task.delivery_note_url ||
@@ -3151,6 +3153,8 @@ Status:
         onClose={() => setShowFullScreenNav(false)}
         driverLat={selectedTask?.driver_current_lat ?? null}
         driverLng={selectedTask?.driver_current_lng ?? null}
+        driverHeading={(selectedTask as any)?.driver_heading ?? null}
+        driverLastUpdate={selectedTask?.driver_last_update ?? null}
         siteLat={selectedTask?.site_latitude ?? null}
         siteLng={selectedTask?.site_longitude ?? null}
         siteName={selectedTask?.site_name || "Site"}
@@ -3159,6 +3163,7 @@ Status:
         onDelayLogged={() => {
           loadAssetsForTask(manifest.manifest_group_id);
         }}
+        
       />
     </div>
   );

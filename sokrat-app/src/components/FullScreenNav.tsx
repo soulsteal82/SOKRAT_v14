@@ -88,6 +88,7 @@ type Props = {
   driverLat: number | null;
   driverLng: number | null;
   driverHeading?: number | null;
+  driverLastUpdate?: string | null;
   siteLat: number | null;
   siteLng: number | null;
   siteName: string;
@@ -113,6 +114,7 @@ export default function FullScreenNav({
   driverLat,
   driverLng,
   driverHeading,
+  driverLastUpdate,
   siteLat,
   siteLng,
   siteName,
@@ -132,7 +134,15 @@ export default function FullScreenNav({
   const [route, setRoute] = useState<RouteResult | null>(null);
   const [traffic, setTraffic] = useState<TrafficSegment[]>([]);
   const [loading, setLoading] = useState(false);
+  const [now, setNow] = useState(Date.now());
 
+  // Ticker to update "now" every 5 seconds for GPS staleness check
+  useEffect(() => {
+    const interval = setInterval(() => setNow(Date.now()), 5000);
+    return () => clearInterval(interval);
+  }, []);
+  
+  // If no GPS for over 30s, show warning. (Requires passing lastUpdate as a prop)
   // Rotate the driver arrow based on heading
   useEffect(() => {
     const el = document.getElementById("sokrat-driver-arrow");
@@ -222,7 +232,14 @@ export default function FullScreenNav({
         </button>
       </div>
             {/* Log Delay floating button + overlay — visible on top of the map */}
+                  {/* GPS Signal Lost Warning */}
+      {driverLastUpdate && (now - new Date(driverLastUpdate).getTime() > 30000) && (
+        <div className="absolute top-16 left-4 right-4 z-[10005] bg-red-950/90 border-2 border-red-500 text-white font-bold text-center p-3 rounded-xl shadow-2xl animate-pulse">
+          ⚠️ GPS SIGNAL LOST — Please check your phone settings.
+        </div>
+      )}
       {!delayOpen && (
+      
          <button
           onClick={() => setDelayOpen(true)}
           className="absolute top-32 right-3 z-[10002] bg-amber-600 hover:bg-amber-500 text-slate-950 text-xs font-black py-2 px-3 rounded-full shadow-2xl border-2 border-amber-300 flex items-center gap-1.5"
