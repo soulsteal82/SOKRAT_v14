@@ -908,14 +908,15 @@ export default function PlannerDashboard() {
     await loadCustodyForTrip(manifestGroupId);
   };
 
-  useEffect(() => {
-    if (!expandedTripId) return;
-    const id = setInterval(() => {
-      loadCustodyForTrip(expandedTripId);
-    }, 5000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expandedTripId]);
+  // Auto-polling disabled for pilot to prevent UI flickering. 
+  // The log loads once on click. Manual refresh is available via the main table.
+  // useEffect(() => {
+  //   if (!expandedTripId) return;
+  //   const id = setInterval(() => {
+  //     loadCustodyForTrip(expandedTripId);
+  //   }, 5000);
+  //   return () => clearInterval(id);
+  // }, [expandedTripId]);
 
   const loadRows = async () => {
     const { data: manifests, error } = await supabase

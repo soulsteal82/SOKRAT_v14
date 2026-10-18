@@ -224,26 +224,19 @@ export default function FullScreenNav({
             <div className="text-sm font-bold text-slate-100">{siteName}</div>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => window.location.reload()}
-            className="text-xs bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 px-3 py-1.5 rounded font-bold uppercase tracking-wider transition"
-          >
-            ↻ Refresh
-          </button>
-          <button
-            onClick={onClose}
-            className="text-xs bg-red-950 hover:bg-red-900 border border-red-800 text-red-300 px-3 py-1.5 rounded font-bold uppercase tracking-wider"
-          >
-            ✕ Close
-          </button>
-        </div>
+        <button
+          onClick={onClose}
+          className="text-xs bg-red-950 hover:bg-red-900 border border-red-800 text-red-300 px-3 py-1.5 rounded font-bold uppercase tracking-wider"
+        >
+          ✕ Close
+        </button>
       </div>
             {/* Log Delay floating button + overlay — visible on top of the map */}
       {/* GPS Signal Lost Warning */}
       {driverLastUpdate && (now - new Date(driverLastUpdate).getTime() > 30000) && (
-        <div className="absolute top-[90px] left-4 right-4 z-[10005] bg-red-950/90 border-2 border-red-500 text-white font-bold text-center p-2 rounded-xl shadow-2xl animate-pulse">
-          ⚠️ GPS SIGNAL LOST — Please check your phone settings.
+        <div className="absolute top-36 left-6 right-6 z-[10000] bg-red-950/95 border-2 border-red-500 text-white font-bold text-center p-3 rounded-xl shadow-2xl animate-pulse">
+          ⚠️ GPS SIGNAL LOST<br/>
+          <span className="text-[10px] font-normal opacity-80">Please check your phone settings.</span>
         </div>
       )}
       {!delayOpen && (
