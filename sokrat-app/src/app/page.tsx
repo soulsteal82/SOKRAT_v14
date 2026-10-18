@@ -2638,17 +2638,7 @@ Status:
           </div>
         )}
 
-        {/* Trip Complete Message Based on Scope */}
-        {selectedTask && assets.length > 0 && isTripComplete() && (
-          <div className="bg-green-950/20 border border-green-900/40 p-2 rounded-lg text-center">
-            <span className="text-green-400 font-bold text-xs block">
-              {getScopeStatusMessage()}
-            </span>
-            <span className="text-green-400/60 text-[8px] font-mono">
-              Trip ID: {manifest.manifest_group_id}
-            </span>
-          </div>
-        )}
+
 
         {/* Action panels - Conditional based on scope */}
         <div className="border-t border-slate-800/80 pt-1.5">
@@ -3124,6 +3114,26 @@ Status:
           {profile === "DISPATCHER" && selectedTask && assets.length > 0 && renderDispatcherActions()}
         </div>
 
+        {/* Trip Complete Button — appears at the bottom for all roles */}
+        {selectedTask && assets.length > 0 && isTripComplete() && (
+          <div className="mt-4 pt-4 border-t border-slate-800/80">
+            <button
+              onClick={() => {
+                setSelectedTask(null);
+                setAssets([]);
+                setActiveAssetId("");
+              }}
+              className="w-full bg-green-600 hover:bg-green-500 text-slate-950 font-bold p-4 rounded-xl shadow-lg transition transform hover:scale-[1.02]"
+            >
+              <span className="block text-lg uppercase tracking-wider mb-1">
+                ✅ Trip Fully Completed
+              </span>
+              <span className="block text-xs opacity-80 font-mono">
+                Tap to close card
+              </span>
+            </button>
+          </div>
+        )}
        
       </div>
 

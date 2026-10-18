@@ -1003,22 +1003,45 @@ function getStatusPill(state: string | undefined) {
                   {/* Live Map */}
                   {task.site_latitude && task.site_longitude && (
                     <div className="border-t border-slate-800/60 pt-1">
-                      {/* ... map stuff ... */}
-                    </div>
-                  )}
+                      <div className="flex justify-between text-[8px] mb-1">
+                        <span className="text-slate-500">🛰️ Updated:</span>
+                        <span className="text-slate-400">
+                          {task.driver_last_update
+                            ? timeSince(task.driver_last_update)
+                            : "GPS pending"}
+                        </span>
+                      </div>
 
-                  {/* Close Task Button — only shows if task is completed or rejected */}
-                  {isTaskComplete(task) && (
-                    <div className="pt-3 mt-2 border-t border-slate-800/60">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleTaskClick(task); // This collapses the card
-                        }}
-                        className="w-full bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold py-2.5 rounded text-sm uppercase tracking-wider transition"
-                      >
-                        ✅ Close Task
-                      </button>
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <MiniMap
+                          driverLat={task.driver_current_lat}
+                          driverLng={task.driver_current_lng}
+                          originLat={task.factories?.[0]?.lat ?? null}
+                          originLng={task.factories?.[0]?.lng ?? null}
+                          originLabel={task.factories?.[0]?.factory_name || "Factory"}
+                          currentState={task.current_state}
+                          siteLat={task.site_latitude}
+                          siteLng={task.site_longitude}
+                          siteName={task.site_name || "Site"}
+                          height="320px"
+                        />
+
+                        {/* ETA card */}
+                        {task.current_state?.startsWith("DISPATCHED") &&
+                          task.site_latitude &&
+                          task.site_longitude && (
+                            <NavigationPanel
+                              driverLat={task.driver_current_lat ?? null}
+                              driverLng={task.driver_current_lng ?? null}
+                              siteLat={task.site_latitude}
+                              siteLng={task.site_longitude}
+                              siteName={task.site_name || "Site"}
+                              isActive={true}
+                              compact={true}
+                              transitDelayMinutes={task.transit_delay_minutes || 0}
+                            />
+                          )}
+                      </div>
                     </div>
                   )}
                 </div>
