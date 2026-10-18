@@ -730,7 +730,7 @@ function getAssetCustody(state: string | null | undefined, selectedTask?: any): 
     const stage = selectedTask?.current_stage || 1;
     const totalStages = selectedTask?.factories?.length || 1;
     if (dispatcher && totalStages > 1) {
-      return `FACTORy ${String.fromCharCode(64 + stage)} (${dispatcher})`;
+return `FACTORY ${String.fromCharCode(64 + stage)} (${dispatcher})`;
       // Stage 1 → "FACTORIES A", Stage 2 → "FACTORIES B"
     }
     return "FACTORY (Dispatcher)";
@@ -1625,7 +1625,7 @@ const saveTaskState = async (
             {
               timestamp: "[PENDING HARDWARE SCAN]",
               state: "INITIALIZED",
-              custody: "FACTORIES (Dispatcher)",
+              custody: "FACTORY (Dispatcher)",
             },
           ],
           has_scanned_qr: false,
@@ -1910,7 +1910,7 @@ onClick={() => {
                           loading_completed_timestamp: null,
                           custodyHistory: [
                             ...a.custodyHistory,
-                            { timestamp: getFormattedTimestamp(), state: "INITIALIZED", custody: "FACTORIES (Dispatcher)" }
+                            { timestamp: getFormattedTimestamp(), state: "INITIALIZED", custody: "FACTORY (Dispatcher)" }
                           ]
                         }
                       : a
