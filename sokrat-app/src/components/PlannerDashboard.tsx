@@ -889,7 +889,12 @@ export default function PlannerDashboard() {
       .order("asset_serial", { ascending: true });
 
     if (data) {
-      setCustodyByTrip((prev) => ({ ...prev, [manifestGroupId]: data }));
+      setCustodyByTrip((prev) => {
+        if (JSON.stringify(prev[manifestGroupId]) === JSON.stringify(data)) {
+          return prev; // No changes, skip re-render
+        }
+        return { ...prev, [manifestGroupId]: data };
+      });
     }
     setCustodyLoading(null);
   };

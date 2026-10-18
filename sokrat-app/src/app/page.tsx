@@ -2735,11 +2735,10 @@ Status:
     !manifest.delivery_note_url.startsWith("data:image") ? (
       <>
         <span className="block text-[8px] text-slate-400 uppercase font-bold">
-          📷 Capture Signed Delivery Note
+          📄 Upload Signed Delivery Note
         </span>
         <p className="text-[9px] text-slate-500 italic">
-          Photograph the delivery note after both inspector and driver have
-          signed it.
+          Take a photo of the signed paper delivery note.
         </p>
         <label
           className={`block w-full text-center font-bold p-3 rounded text-xs uppercase tracking-wider cursor-pointer transition ${
@@ -2748,8 +2747,7 @@ Status:
               : "bg-amber-600 hover:bg-amber-500 text-slate-950"
           }`}
         >
-          {signedDnBusy ? "⏳ Uploading…" : "📷 Capture Signed DN"}
-          <input
+          {signedDnBusy ? "⏳ Uploading…" : "📷 Take Photo of DN"}          <input
             type="file"
             accept="image/*"
             capture="environment"
