@@ -890,8 +890,9 @@ export default function PlannerDashboard() {
 
     if (data) {
       setCustodyByTrip((prev) => {
+        // Only update state if the data actually changed to prevent screen flicker
         if (JSON.stringify(prev[manifestGroupId]) === JSON.stringify(data)) {
-          return prev; // No changes, skip re-render
+          return prev;
         }
         return { ...prev, [manifestGroupId]: data };
       });
@@ -908,15 +909,14 @@ export default function PlannerDashboard() {
     await loadCustodyForTrip(manifestGroupId);
   };
 
-  // Auto-polling disabled for pilot to prevent UI flickering. 
-  // The log loads once on click. Manual refresh is available via the main table.
-  // useEffect(() => {
-  //   if (!expandedTripId) return;
-  //   const id = setInterval(() => {
-  //     loadCustodyForTrip(expandedTripId);
-  //   }, 5000);
-  //   return () => clearInterval(id);
-  // }, [expandedTripId]);
+  useEffect(() => {
+    if (!expandedTripId) return;
+    const id = setInterval(() => {
+      loadCustodyForTrip(expandedTripId);
+    }, 5000);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expandedTripId]);
 
   const loadRows = async () => {
     const { data: manifests, error } = await supabase
