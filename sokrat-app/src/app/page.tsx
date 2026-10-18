@@ -1499,21 +1499,37 @@ const saveTaskState = async (
 
       if (manifestError) throw manifestError;
 
-      // 2. Fetch the driver's current stats
-      const { data: driverData, error: driverError } = await supabase
+      // 2. Fetch the driver's current stats (using maybeSingle so it doesn't crash on new drivers)
+      let { data: driverData } = await supabase
         .from("drivers")
         .select("id, rating, total_trips, total_rating_sum")
         .eq("name", driverName)
-        .single();
+        .maybeSingle();
 
-      if (driverError) throw driverError;
+      // 3. If the driver doesn't exist, create them with their first rating
+      if (!driverData) {
+        const { data: newDriver, error: createError } = await supabase
+          .from("drivers")
+          .insert({
+            name: driverName,
+            rating: score,
+            total_trips: 1,
+            total_rating_sum: score,
+          })
+          .select()
+          .single();
 
-      // 3. Calculate new aggregate
+        if (createError) throw createError;
+        
+        return { success: true, newRating: score, newTotalTrips: 1 };
+      }
+
+      // 4. Calculate new aggregate
       const newTotalTrips = (driverData.total_trips || 0) + 1;
       const newRatingSum = (driverData.total_rating_sum || 0) + score;
       const newAverageRating = newRatingSum / newTotalTrips;
 
-      // 4. Update the driver record
+      // 5. Update the driver record
       const { error: updateError } = await supabase
         .from("drivers")
         .update({
@@ -1525,10 +1541,6 @@ const saveTaskState = async (
         .eq("id", driverData.id);
 
       if (updateError) throw updateError;
-
-      console.log(
-        `[RATING] Driver ${driverName}: ${score}★ → new avg ${newAverageRating.toFixed(2)}★ (${newTotalTrips} trips)`
-      );
 
       return { success: true, newRating: newAverageRating, newTotalTrips };
     } catch (err: any) {

@@ -973,7 +973,13 @@ export default function PlannerDashboard() {
       return a.manifest_group_id.localeCompare(b.manifest_group_id);
     });
 
-    setRows(built);
+    setRows((prev) => {
+      // Prevent re-rendering if the data hasn't actually changed
+      if (JSON.stringify(prev) === JSON.stringify(built)) {
+        return prev;
+      }
+      return built;
+    });
     setLastRefresh(new Date());
     setLoading(false);
   };
