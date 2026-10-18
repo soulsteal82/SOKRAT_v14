@@ -337,8 +337,8 @@ export default function Home() {
           weight_tons: parseFloat((8.50 + i * 0.02).toFixed(2)),
           structural_type: "Load-Bearing Precast Wall Panel"
         },
-        custodyHistory: [{ timestamp: "[PENDING HARDWARE SCAN]", state: "INITIALIZED", custody: "FACTORIES (Dispatcher)" }],
-        hasScannedQR: false,
+        custodyHistory: [{ timestamp: "[PENDING HARDWARE SCAN]", state: "INITIALIZED", custody: "FACTORY (Dispatcher)" }],
+                hasScannedQR: false,
         rejection_photos: [],
         loading_started_timestamp: null,
         loading_completed_timestamp: null,
