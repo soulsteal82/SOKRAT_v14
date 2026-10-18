@@ -1807,8 +1807,7 @@ const saveTaskState = async (
           </div>
         )}
                 {/* View Delivery Note — only after loading complete */}
-{currentAsset &&
- currentAsset.state.startsWith("DISPATCHED") && (
+{currentAsset && !["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(currentAsset.state) && (
   <button
     onClick={() => setShowDeliveryNote(true)}
     className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 font-bold p-2 rounded text-xs uppercase tracking-wider transition flex items-center justify-center gap-2"
@@ -2714,7 +2713,7 @@ Status:
                   />
                   </div>
                                     {/* View Delivery Note — inspector can verify against physical copy */}
-{currentAsset?.state?.startsWith("DISPATCHED") && (
+{currentAsset && !["INITIALIZED", "LOADING_INITIATED", "LOADING_COMPLETED"].includes(currentAsset.state) && (
   <button
     onClick={() => setShowDeliveryNote(true)}
     className="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-400 font-bold p-2 rounded text-xs uppercase tracking-wider transition flex items-center justify-center gap-2"
@@ -2965,15 +2964,10 @@ Status:
                       </div>
                     )
                   )}
-                  {/* Auto-pass geofence for pilot — no lock, no override needed */}
-                  <div className="bg-green-950/20 border border-green-900/40 p-2 rounded text-[10px] text-green-400 text-center font-mono">
-                    ✅ Ready — tap to continue
-                  </div>
-
-                  <div className="space-y-2">
+                  <div className="space-y-2 mt-2">
                     <div className="grid grid-cols-2 gap-2">
-                      {(currentAsset?.state === "ARRIVED_AT_GATE" || currentAsset?.state === "DISPATCHED") && (
-                        <button
+                      {(currentAsset?.state?.startsWith("DISPATCHED") || currentAsset?.state === "ARRIVED_AT_GATE") && (
+                                              <button
                           onClick={() => {
                             const defectLabel = selectedInspectorDefect === "No Defects"
                               ? "NO_DEFECTS"
