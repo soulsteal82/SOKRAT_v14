@@ -82,7 +82,6 @@ type Vehicle = {
   driver_status: string | null;
   driver_last_update: string | null;
   current_state: string | null;
-  // enriched fields for the popup:
   vehicle_plate: string | null;
   vehicle_trailer_type: string | null;
   vehicle_ownership: string | null;
@@ -91,6 +90,8 @@ type Vehicle = {
   site_lat: number | null;
   site_lng: number | null;
   panels_count: number;
+  delay_reason: string | null;
+  delay_minutes: number;
 };
 
 // ---- Status → color mapping ----
@@ -160,7 +161,7 @@ function scopeLabel(scope: string | null | undefined): string {
   if (scope === "DELIVERY_ONLY") return "🚚 Delivery Only";
   return scope || "—";
 }
-function getStatusLabel(state: string | null | undefined, fallback: string | null) {
+function getStatusLabel(state: string | null | undefined, fallback: string | null, delayMinutes: number = 0) {
   const s = state || "";
   if (s.includes("REJECTED")) return "Rejected";
   if (s === "INSTALLATION_COMPLETED") return "Completed";
@@ -169,7 +170,11 @@ function getStatusLabel(state: string | null | undefined, fallback: string | nul
   if (s === "GATE_IN_OFFLOADING") return "Offloading";
   if (s === "OFFLOADING_COMPLETED") return "Offloaded";
   if (s === "ARRIVED_AT_GATE") return "At Gate";
-  if (s.startsWith("DISPATCHED")) return "In Transit";
+  if (s.startsWith("DISPATCHED")) {
+    // Show delay instead of generic In Transit if one was logged
+    if (delayMinutes > 0) return `In Transit (+${delayMinutes}m Delay)`;
+    return "In Transit";
+  }
   if (s === "LOADING_COMPLETED") return "Loaded";
   if (s === "LOADING_INITIATED") return "Loading";
   if (s === "INITIALIZED") return "At Factory";
@@ -242,7 +247,7 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
     // Get current state per manifest from assets
     const { data: assets } = await supabase
       .from("assets")
-      .select("manifest_group_id, state")
+      .select("manifest_group_id, state, transit_delay_minutes, delay_reason")
       .in("manifest_group_id", manifestIds);
 
     const stateRank = (s: string): number => {
@@ -320,6 +325,8 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
           site_lat: m.site_latitude,
           site_lng: m.site_longitude,
           panels_count: panelCountByManifest[m.manifest_group_id] || 0,
+          delay_reason: (assets || []).find((a: any) => a.manifest_group_id === m.manifest_group_id)?.delay_reason || null,
+          delay_minutes: (assets || []).find((a: any) => a.manifest_group_id === m.manifest_group_id)?.transit_delay_minutes || 0,
         } as Vehicle;
       })
       .filter((v): v is Vehicle => v !== null);
@@ -643,8 +650,8 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
 
             {vehicles.map((v) => {
               const color = getStatusColor(v.current_state, v.driver_status);
-              const statusLabel = getStatusLabel(v.current_state, v.driver_status);
-              const icon = buildVehicleIcon(color);
+              const statusLabel = getStatusLabel(v.current_state, v.driver_status, v.delay_minutes);
+                            const icon = buildVehicleIcon(color);
               const etaMinutes = getEtaFromCachedRoute(
                 v.manifest_group_id,
                 v.driver_lat,
@@ -733,6 +740,14 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
                           {statusLabel}
                         </span>
                       </div>
+                      {v.delay_minutes > 0 && (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-slate-500">Delay Reason:</span>
+                          <span className="font-bold text-[10px] text-red-600">
+                            {v.delay_reason}
+                          </span>
+                        </div>
+                      )}
 
                       <div className="flex justify-between gap-3">
                         <span className="text-slate-500">State:</span>
@@ -740,6 +755,15 @@ export default function FleetRadar({ isOpen, onClose }: Props) {
                           {v.current_state || "—"}
                         </span>
                       </div>
+
+                      {v.delay_minutes > 0 && (
+                        <div className="flex justify-between gap-3">
+                          <span className="text-slate-500">Delay:</span>
+                          <span className="font-bold text-[10px] text-red-600">
+                            +{v.delay_minutes}m ({v.delay_reason})
+                          </span>
+                        </div>
+                      )}
 
                       <div className="flex justify-between gap-3 border-t border-slate-200 pt-1 mt-1">
                         <span className="text-slate-500">ETA:</span>
