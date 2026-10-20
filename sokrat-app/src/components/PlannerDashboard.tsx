@@ -874,6 +874,11 @@ export default function PlannerDashboard() {
   const [radarOpen, setRadarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>("trips");
 
+  // Sorting and Collapse State
+  const [sortKey, setSortKey] = useState<"priority" | "ref" | "status" | "delay">("priority");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+  const [showCompleted, setShowCompleted] = useState(false);
+
   const [expandedTripId, setExpandedTripId] = useState<string | null>(null);
   const [custodyByTrip, setCustodyByTrip] = useState<
     Record<string, { asset_serial: string; state: string; custody_history: any[] }[]>
@@ -972,11 +977,27 @@ export default function PlannerDashboard() {
     });
 
     const priorityRank: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+    
     built.sort((a, b) => {
-      const ra = priorityRank[a.priority] ?? 99;
-      const rb = priorityRank[b.priority] ?? 99;
-      if (ra !== rb) return ra - rb;
-      return a.manifest_group_id.localeCompare(b.manifest_group_id);
+      let cmp = 0;
+      
+      if (sortKey === "priority") {
+        const ra = priorityRank[a.priority] ?? 99;
+        const rb = priorityRank[b.priority] ?? 99;
+        cmp = ra - rb;
+      } else if (sortKey === "ref") {
+        cmp = a.manifest_group_id.localeCompare(b.manifest_group_id);
+      } else if (sortKey === "status") {
+        cmp = a.status_label.localeCompare(b.status_label);
+      } else if (sortKey === "delay") {
+        cmp = a.total_delay_minutes - b.total_delay_minutes;
+      }
+
+      if (cmp === 0) {
+        cmp = a.manifest_group_id.localeCompare(b.manifest_group_id);
+      }
+      
+      return sortDir === "asc" ? cmp : -cmp;
     });
 
     setRows((prev) => {
@@ -1137,125 +1158,234 @@ export default function PlannerDashboard() {
         )}
       </div>
 
-      {/* Tab content */}
+       {/* Tab content */}
       <div className="p-3">
         {activeTab === "trips" && (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
-                <tr className="border-b border-slate-800/60 text-[9px] uppercase tracking-wider text-slate-500 font-bold">
-                  <th className="text-left px-4 py-2">Trip Ref</th>
-                  <th className="text-left px-4 py-2">Status</th>
-                  <th className="text-left px-4 py-2">Delay Class</th>
+                <tr className="border-b border-slate-800/60 text-[9px] uppercase tracking-wider text-slate-500 font-bold select-none">
+                  <th 
+                    onClick={() => {
+                      if (sortKey === "ref") setSortDir(sortDir === "asc" ? "desc" : "asc");
+                      else { setSortKey("ref"); setSortDir("asc"); }
+                    }}
+                    className="text-left px-4 py-2 cursor-pointer hover:text-cyan-400 transition"
+                  >
+                    Trip Ref {sortKey === "ref" && (sortDir === "asc" ? "▲" : "▼")}
+                  </th>
+                  <th 
+                    onClick={() => {
+                      if (sortKey === "status") setSortDir(sortDir === "asc" ? "desc" : "asc");
+                      else { setSortKey("status"); setSortDir("asc"); }
+                    }}
+                    className="text-left px-4 py-2 cursor-pointer hover:text-cyan-400 transition"
+                  >
+                    Status {sortKey === "status" && (sortDir === "asc" ? "▲" : "▼")}
+                  </th>
+                  <th 
+                    onClick={() => {
+                      if (sortKey === "delay") setSortDir(sortDir === "asc" ? "desc" : "asc");
+                      else { setSortKey("delay"); setSortDir("desc"); }
+                    }}
+                    className="text-left px-4 py-2 cursor-pointer hover:text-cyan-400 transition"
+                  >
+                    Delay Class {sortKey === "delay" && (sortDir === "asc" ? "▲" : "▼")}
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => {
-                  const isExpanded = expandedTripId === r.manifest_group_id;
-                  const custody = custodyByTrip[r.manifest_group_id] || [];
-                  const isLoading = custodyLoading === r.manifest_group_id;
+                {/* ACTIVE TRIPS */}
+                {rows
+                  .filter((r) => !r.status_label.includes("COMPLETED"))
+                  .map((r) => {
+                    const isExpanded = expandedTripId === r.manifest_group_id;
+                    const custody = custodyByTrip[r.manifest_group_id] || [];
+                    const isLoading = custodyLoading === r.manifest_group_id;
 
-                  return (
-                    <React.Fragment key={r.manifest_group_id}>
-                      <tr
-                        onClick={() => handleToggleTrip(r.manifest_group_id)}
-                        className="border-b border-slate-900 hover:bg-slate-900/60 transition cursor-pointer"
-                      >
-                        <td className="px-4 py-2.5 font-mono text-slate-200 text-[10px]">
-                          <span className="inline-flex items-center gap-2">
-                            <span className="text-cyan-500 text-[10px]">
-                              {isExpanded ? "▼" : "▶"}
+                    return (
+                      <React.Fragment key={r.manifest_group_id}>
+                        <tr
+                          onClick={() => handleToggleTrip(r.manifest_group_id)}
+                          className="border-b border-slate-900 hover:bg-slate-900/60 transition cursor-pointer"
+                        >
+                          <td className="px-4 py-2.5 font-mono text-slate-200 text-[10px]">
+                            <span className="inline-flex items-center gap-2">
+                              <span className="text-cyan-500 text-[10px]">
+                                {isExpanded ? "▼" : "▶"}
+                              </span>
+                              {r.manifest_group_id}
                             </span>
-                            {r.manifest_group_id}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <span
-                            className={`inline-block text-[9px] px-2 py-1 rounded font-bold border ${r.status_color}`}
-                          >
-                            {r.status_label}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5">
-                          <span
-                            className={`inline-block text-[9px] px-2 py-1 rounded font-bold border border-slate-800 ${r.delay_color}`}
-                          >
-                            {r.delay_label}
-                          </span>
-                          {r.total_delay_minutes > 0 && (
-                            <span className="text-[8px] text-slate-500 font-mono ml-2">
-                              ({r.total_delay_minutes}m)
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span
+                              className={`inline-block text-[9px] px-2 py-1 rounded font-bold border ${r.status_color}`}
+                            >
+                              {r.status_label}
                             </span>
-                          )}
-                        </td>
-                      </tr>
-
-                      {isExpanded && (
-                        <tr className="border-b border-slate-900 bg-slate-950/60">
-                          <td colSpan={3} className="px-4 py-3">
-                            <div className="space-y-2">
-                              <div className="text-[9px] uppercase font-bold text-purple-300 tracking-widest">
-                                Custody Log
-                              </div>
-
-                              {isLoading && (
-                                <div className="text-[10px] text-slate-500 italic">
-                                  Loading custody history…
-                                </div>
-                              )}
-
-                              {!isLoading && custody.length === 0 && (
-                                <div className="text-[10px] text-slate-500 italic">
-                                  No panels yet.
-                                </div>
-                              )}
-
-                              {!isLoading &&
-                                custody.length > 0 &&
-                                (() => {
-                                  const focusPanel = [...custody].sort(
-                                    (a, b) =>
-                                      stateRank(a.state) - stateRank(b.state)
-                                  )[0];
-
-                                  return (
-                                    <div className="bg-slate-900/60 border border-slate-800 rounded p-2">
-                                      <div className="space-y-0.5 font-mono text-[9px] text-slate-400">
-                                        {(focusPanel.custody_history || []).map(
-                                          (log: any, i: number) => {
-                                            const ts = log.timestamp;
-                                            const displayTs =
-                                              ts &&
-                                              ts.trim() !== "" &&
-                                              ts !== "[PENDING HARDWARE SCAN]"
-                                                ? ts
-                                                : "—";
-                                            return (
-                                              <div
-                                                key={i}
-                                                className="flex justify-between gap-3"
-                                              >
-                                                <span className="truncate">
-                                                  [{displayTs}] {log.state}
-                                                </span>
-                                                <span className="text-cyan-500 shrink-0">
-                                                  → {log.custody}
-                                                </span>
-                                              </div>
-                                            );
-                                          }
-                                        )}
-                                      </div>
-                                    </div>
-                                  );
-                                })()}
-                            </div>
+                          </td>
+                          <td className="px-4 py-2.5">
+                            <span
+                              className={`inline-block text-[9px] px-2 py-1 rounded font-bold border border-slate-800 ${r.delay_color}`}
+                            >
+                              {r.delay_label}
+                            </span>
+                            {r.total_delay_minutes > 0 && (
+                              <span className="text-[8px] text-slate-500 font-mono ml-2">
+                                ({r.total_delay_minutes}m)
+                              </span>
+                            )}
                           </td>
                         </tr>
-                      )}
-                    </React.Fragment>
-                  );
-                })}
+
+                        {isExpanded && (
+                          <tr className="border-b border-slate-900 bg-slate-950/60">
+                            <td colSpan={3} className="px-4 py-3">
+                              <div className="space-y-2">
+                                <div className="text-[9px] uppercase font-bold text-purple-300 tracking-widest">
+                                  Custody Log
+                                </div>
+
+                                {isLoading && (
+                                  <div className="text-[10px] text-slate-500 italic">
+                                    Loading custody history…
+                                  </div>
+                                )}
+
+                                {!isLoading && custody.length === 0 && (
+                                  <div className="text-[10px] text-slate-500 italic">
+                                    No panels yet.
+                                  </div>
+                                )}
+
+                                {!isLoading &&
+                                  custody.length > 0 &&
+                                  (() => {
+                                    const focusPanel = [...custody].sort(
+                                      (a, b) =>
+                                        stateRank(a.state) - stateRank(b.state)
+                                    )[0];
+
+                                    return (
+                                      <div className="bg-slate-900/60 border border-slate-800 rounded p-2">
+                                        <div className="space-y-0.5 font-mono text-[9px] text-slate-400">
+                                          {(focusPanel.custody_history || []).map(
+                                            (log: any, i: number) => {
+                                              const ts = log.timestamp;
+                                              const displayTs =
+                                                ts &&
+                                                ts.trim() !== "" &&
+                                                ts !== "[PENDING HARDWARE SCAN]"
+                                                  ? ts
+                                                  : "—";
+                                              return (
+                                                <div
+                                                  key={i}
+                                                  className="flex justify-between gap-3"
+                                                >
+                                                  <span className="truncate">
+                                                    [{displayTs}] {log.state}
+                                                  </span>
+                                                  <span className="text-cyan-500 shrink-0">
+                                                    → {log.custody}
+                                                  </span>
+                                                </div>
+                                              );
+                                            }
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    );
+                  })}
+
+                {/* COMPLETED TRIPS */}
+                {rows.filter((r) => r.status_label.includes("COMPLETED")).length > 0 && (
+                  <>
+                    <tr className="border-b border-slate-800 bg-slate-900/40 cursor-pointer hover:bg-slate-800/60 transition select-none" onClick={() => setShowCompleted(!showCompleted)}>
+                      <td colSpan={3} className="px-4 py-2 font-bold text-slate-400 text-[10px] uppercase tracking-wider">
+                        ✅ Completed ({rows.filter((r) => r.status_label.includes("COMPLETED")).length}) — {showCompleted ? "▲ Hide" : "▼ Show"}
+                      </td>
+                    </tr>
+                    {showCompleted && rows.filter((r) => r.status_label.includes("COMPLETED")).map((r) => {
+                      const isExpanded = expandedTripId === r.manifest_group_id;
+                      const custody = custodyByTrip[r.manifest_group_id] || [];
+                      const isLoading = custodyLoading === r.manifest_group_id;
+
+                      return (
+                        <React.Fragment key={r.manifest_group_id}>
+                          <tr
+                            onClick={() => handleToggleTrip(r.manifest_group_id)}
+                            className="border-b border-slate-900 hover:bg-slate-900/60 transition cursor-pointer opacity-70"
+                          >
+                            <td className="px-4 py-2.5 font-mono text-slate-400 text-[10px]">
+                              <span className="inline-flex items-center gap-2">
+                                <span className="text-cyan-500 text-[10px]">
+                                  {isExpanded ? "▼" : "▶"}
+                                </span>
+                                {r.manifest_group_id}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <span
+                                className={`inline-block text-[9px] px-2 py-1 rounded font-bold border ${r.status_color}`}
+                              >
+                                {r.status_label}
+                              </span>
+                            </td>
+                            <td className="px-4 py-2.5">
+                              <span
+                                className={`inline-block text-[9px] px-2 py-1 rounded font-bold border border-slate-800 ${r.delay_color}`}
+                              >
+                                {r.delay_label}
+                              </span>
+                            </td>
+                          </tr>
+
+                          {isExpanded && (
+                            <tr className="border-b border-slate-900 bg-slate-950/60">
+                              <td colSpan={3} className="px-4 py-3">
+                                <div className="space-y-2">
+                                  <div className="text-[9px] uppercase font-bold text-purple-300 tracking-widest">
+                                    Custody Log
+                                  </div>
+                                  {isLoading && (
+                                    <div className="text-[10px] text-slate-500 italic">Loading…</div>
+                                  )}
+                                  {!isLoading && custody.length > 0 && (() => {
+                                    const focusPanel = [...custody].sort((a, b) => stateRank(a.state) - stateRank(b.state))[0];
+                                    return (
+                                      <div className="bg-slate-900/60 border border-slate-800 rounded p-2">
+                                        <div className="space-y-0.5 font-mono text-[9px] text-slate-400">
+                                          {(focusPanel.custody_history || []).map((log: any, i: number) => {
+                                            const ts = log.timestamp;
+                                            const displayTs = ts && ts.trim() !== "" && ts !== "[PENDING HARDWARE SCAN]" ? ts : "—";
+                                            return (
+                                              <div key={i} className="flex justify-between gap-3">
+                                                <span className="truncate">[{displayTs}] {log.state}</span>
+                                                <span className="text-cyan-500 shrink-0">→ {log.custody}</span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      </div>
+                                    );
+                                  })()}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })}
+                  </>
+                )}
               </tbody>
             </table>
 
