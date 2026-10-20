@@ -885,6 +885,13 @@ export default function PlannerDashboard() {
   >({});
   const [custodyLoading, setCustodyLoading] = useState<string | null>(null);
 
+  // Force a re-render every second so the "Updated Xs ago" timer ticks live
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const timer = setInterval(() => setTick(t => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   const loadCustodyForTrip = async (manifestGroupId: string) => {
     setCustodyLoading(manifestGroupId);
     const { data } = await supabase
@@ -976,30 +983,6 @@ export default function PlannerDashboard() {
       };
     });
 
-    const priorityRank: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-    
-    built.sort((a, b) => {
-      let cmp = 0;
-      
-      if (sortKey === "priority") {
-        const ra = priorityRank[a.priority] ?? 99;
-        const rb = priorityRank[b.priority] ?? 99;
-        cmp = ra - rb;
-      } else if (sortKey === "ref") {
-        cmp = a.manifest_group_id.localeCompare(b.manifest_group_id);
-      } else if (sortKey === "status") {
-        cmp = a.status_label.localeCompare(b.status_label);
-      } else if (sortKey === "delay") {
-        cmp = a.total_delay_minutes - b.total_delay_minutes;
-      }
-
-      if (cmp === 0) {
-        cmp = a.manifest_group_id.localeCompare(b.manifest_group_id);
-      }
-      
-      return sortDir === "asc" ? cmp : -cmp;
-    });
-
     setRows((prev) => {
       // Prevent re-rendering if the data hasn't actually changed
       if (JSON.stringify(prev) === JSON.stringify(built)) {
@@ -1050,6 +1033,30 @@ export default function PlannerDashboard() {
       }
     };
   }, []);
+
+  // Sort the rows dynamically on every render based on the selected header
+  const sortedRows = [...rows].sort((a, b) => {
+    let cmp = 0;
+    const priorityRank: Record<string, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
+    
+    if (sortKey === "priority") {
+      const ra = priorityRank[a.priority] ?? 99;
+      const rb = priorityRank[b.priority] ?? 99;
+      cmp = ra - rb;
+    } else if (sortKey === "ref") {
+      cmp = a.manifest_group_id.localeCompare(b.manifest_group_id);
+    } else if (sortKey === "status") {
+      cmp = a.status_label.localeCompare(b.status_label);
+    } else if (sortKey === "delay") {
+      cmp = a.total_delay_minutes - b.total_delay_minutes;
+    }
+
+    if (cmp === 0) {
+      cmp = a.manifest_group_id.localeCompare(b.manifest_group_id);
+    }
+    
+    return sortDir === "asc" ? cmp : -cmp;
+  });
 
   if (loading) {
     return (
@@ -1196,7 +1203,7 @@ export default function PlannerDashboard() {
               </thead>
               <tbody>
                 {/* ACTIVE TRIPS */}
-                {rows
+                {sortedRows
                   .filter((r) => !r.status_label.includes("COMPLETED"))
                   .map((r) => {
                     const isExpanded = expandedTripId === r.manifest_group_id;
@@ -1306,14 +1313,14 @@ export default function PlannerDashboard() {
                   })}
 
                 {/* COMPLETED TRIPS */}
-                {rows.filter((r) => r.status_label.includes("COMPLETED")).length > 0 && (
+                {sortedRows.filter((r) => r.status_label.includes("COMPLETED")).length > 0 && (
                   <>
                     <tr className="border-b border-slate-800 bg-slate-900/40 cursor-pointer hover:bg-slate-800/60 transition select-none" onClick={() => setShowCompleted(!showCompleted)}>
                       <td colSpan={3} className="px-4 py-2 font-bold text-slate-400 text-[10px] uppercase tracking-wider">
-                        ✅ Completed ({rows.filter((r) => r.status_label.includes("COMPLETED")).length}) — {showCompleted ? "▲ Hide" : "▼ Show"}
+                        ✅ Completed ({sortedRows.filter((r) => r.status_label.includes("COMPLETED")).length}) — {showCompleted ? "▲ Hide" : "▼ Show"}
                       </td>
                     </tr>
-                    {showCompleted && rows.filter((r) => r.status_label.includes("COMPLETED")).map((r) => {
+                    {showCompleted && sortedRows.filter((r) => r.status_label.includes("COMPLETED")).map((r) => {
                       const isExpanded = expandedTripId === r.manifest_group_id;
                       const custody = custodyByTrip[r.manifest_group_id] || [];
                       const isLoading = custodyLoading === r.manifest_group_id;
