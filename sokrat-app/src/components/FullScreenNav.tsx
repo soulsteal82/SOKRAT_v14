@@ -391,14 +391,15 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
                     ? (step.distanceMeters / 1000).toFixed(2)
                     : null;
 
+                  const instructionLower = step.instruction.toLowerCase();
                   const icon =
                     step.maneuver === "arrive"
                       ? "🏁"
-                      : step.instruction.toLowerCase().includes("left")
+                      : instructionLower.includes("left")
                       ? "⬅️"
-                      : step.instruction.toLowerCase().includes("right")
+                      : instructionLower.includes("right")
                       ? "➡️"
-                      : step.instruction.toLowerCase().includes("roundabout")
+                      : instructionLower.includes("roundabout")
                       ? "🔄"
                       : "⬆️";
 
@@ -589,38 +590,19 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
           </div>
         )}
 
-                {/* Next-step bottom banner — dynamically updates based on distance */}
+        {/* Next-step bottom banner — Tap to expand */}
         {route && route.steps.length > 0 && (() => {
-          // Find the closest step based on driver's current position
-          let currentStep = route.steps[0];
-          let minDistance = Infinity;
+          // For the pilot, we show the first step in the list.
+          // (A true dynamic step index requires deeper OSRM geometry parsing).
+          const activeStep = route.steps[0];
           
-          if (driverLat != null && driverLng != null) {
-            // Simple logic: find the step whose start point is closest to the driver
-            // (For production, we would use OSRM's step geometries, but this works for the pilot)
-            route.steps.forEach((step, idx) => {
-              // We approximate by checking the step's distance to the destination
-              // The step with the largest distance remaining is usually the current one
-              // This is a fallback logic. A better way is to track the step index in the parent.
-              // For now, let's just show the first 3 steps so the driver sees variety.
-              if (idx < 3 && step.distanceMeters > 0 && step.distanceMeters < minDistance) {
-                // We don't have the exact geometry, so we rotate through the first few steps
-                // as the driver moves. This is a hack, but it will show changing instructions.
-              }
-            });
-          }
-          
-          // Better approach: Use the route.steps array and shift based on time or distance
-          // For the pilot, let's just show the first step that is further than 50m away
-          const activeStep = route.steps.find(s => s.distanceMeters > 50) || route.steps[0];
-          
-          const icon = activeStep.maneuver === "arrive"
-            ? "🏁"
-            : activeStep.maneuver.includes("left")
-            ? "⬅️"
-            : activeStep.maneuver.includes("right")
-            ? "➡️"
-            : "⬆️";
+          const instructionLower = activeStep.instruction.toLowerCase();
+          const icon = 
+            activeStep.maneuver === "arrive" ? "🏁" :
+            instructionLower.includes("left") ? "⬅️" :
+            instructionLower.includes("right") ? "➡️" :
+            instructionLower.includes("roundabout") ? "🔄" :
+            "⬆️";
 
           let instruction = activeStep.instruction;
           if (/[\u0600-\u06FF]/.test(instruction)) {
@@ -630,7 +612,7 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
 
           return (
             <div 
-              className="absolute bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur border-t-2 border-cyan-500/50 px-6 py-6 z-[10001] rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.8)] cursor-pointer"
+              className="absolute bottom-0 left-0 right-0 bg-slate-950/95 backdrop-blur border-t-2 border-cyan-500/50 px-6 py-6 z-[10001] rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.8)] cursor-pointer active:scale-95 transition-transform"
               onClick={() => setStepsOpen(true)}
             >
               <div className="flex items-center gap-6">
