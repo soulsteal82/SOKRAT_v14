@@ -283,27 +283,42 @@ export default function NavigationPanel({
           <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1">
             Turn-by-turn
           </div>
-          {visibleSteps.map((step, i) => (
-            <div key={i} className="flex items-start gap-2 text-xs">
-              <span className="text-cyan-400 text-sm mt-0.5">
-                {step.maneuver === "arrive"
-                  ? "🏁"
-                  : step.maneuver.includes("left")
-                  ? "⬅️"
-                  : step.maneuver.includes("right")
-                  ? "➡️"
-                  : "⬆️"}
-              </span>
-              <div className="flex-1">
-                <div className="text-slate-200">{step.instruction}</div>
-                {step.distanceMeters > 0 && (
-                  <div className="text-[10px] text-slate-500 font-mono">
-                    {(step.distanceMeters / 1000).toFixed(1)} km
+          {visibleSteps.map((step, i) => {
+            const instructionLower = step.instruction.toLowerCase();
+            const icon =
+              step.maneuver === "arrive"
+                ? "🏁"
+                : instructionLower.includes("left")
+                ? "⬅️"
+                : instructionLower.includes("right")
+                ? "➡️"
+                : instructionLower.includes("roundabout")
+                ? "🔄"
+                : "⬆️";
+
+            return (
+              <div key={i} className="flex items-start gap-2 text-xs">
+                <span className="text-cyan-400 text-lg mt-0.5 shrink-0">{icon}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="text-slate-200 leading-snug">
+                    {(() => {
+                      let txt = step.instruction;
+                      if (/[\u0600-\u06FF]/.test(txt)) {
+                        txt = txt.replace(/(?:onto|to|on|via)\s+.*/, "").trim();
+                        if (!txt) txt = "Continue on route";
+                      }
+                      return txt;
+                    })()}
                   </div>
-                )}
+                  {step.distanceMeters > 0 && (
+                    <div className="text-[10px] text-slate-500 font-mono mt-0.5">
+                      {(step.distanceMeters / 1000).toFixed(1)} km
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {route.steps.length > 3 && (
             <button
               onClick={() => setShowAllSteps((v) => !v)}
@@ -316,6 +331,43 @@ export default function NavigationPanel({
           )}
         </div>
       )}
+
+      {/* Next-step bottom banner — Consistent with FullScreenNav */}
+      {!compact && route && route.steps.length > 0 && (() => {
+        const activeStep = route.steps[0];
+        
+        const instructionLower = activeStep.instruction.toLowerCase();
+        const icon = 
+          activeStep.maneuver === "arrive" ? "🏁" :
+          instructionLower.includes("left") ? "⬅️" :
+          instructionLower.includes("right") ? "➡️" :
+          instructionLower.includes("roundabout") ? "🔄" :
+          "⬆️";
+
+        let instruction = activeStep.instruction;
+        if (/[\u0600-\u06FF]/.test(instruction)) {
+          instruction = instruction.replace(/(?:onto|to|on|via)\s+.*/, "").trim();
+          if (!instruction) instruction = "Continue on route";
+        }
+
+        return (
+          <div className="bg-slate-950/90 border-t-2 border-cyan-500/50 px-4 py-4 rounded-b-xl flex items-center gap-4">
+            <span className="text-4xl text-cyan-300 drop-shadow-[0_0_15px_rgba(34,211,238,0.5)]">
+              {icon}
+            </span>
+            <div className="flex-1">
+              <div className="text-lg text-slate-100 font-bold leading-tight">
+                {instruction}
+              </div>
+              {activeStep.distanceMeters > 0 && (
+                <div className="text-xs text-cyan-500 font-mono mt-0.5 font-bold">
+                  in {(activeStep.distanceMeters / 1000).toFixed(1)} km
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Destination */}
       <div className="p-3 bg-slate-950/60">
