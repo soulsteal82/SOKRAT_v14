@@ -100,6 +100,7 @@ export default function MiniMap({
 }: Props) {
   const [mounted, setMounted] = useState(false);
   const [L, setL] = useState<any>(null);
+  const [allowMapInteraction, setAllowMapInteraction] = useState(false);
     const [osrmRoute, setOsrmRoute] = useState<RouteResult | null>(null);
   const [osrmTraffic, setOsrmTraffic] = useState<TrafficSegment[]>([]);
   const [icons, setIcons] = useState<{
@@ -147,9 +148,30 @@ export default function MiniMap({
       window.dispatchEvent(new Event("resize"));
     }, 600);
 
+    // Two-finger detection
+    const mapContainer = document.getElementById("minimap-container");
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length >= 2) {
+        setAllowMapInteraction(true);
+      }
+    };
+    const handleTouchEnd = () => {
+      // Optional: if you want it to lock again after they lift fingers, uncomment:
+      // setAllowMapInteraction(false);
+    };
+
+    if (mapContainer) {
+      mapContainer.addEventListener("touchstart", handleTouchStart);
+      mapContainer.addEventListener("touchend", handleTouchEnd);
+    }
+
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
+      if (mapContainer) {
+        mapContainer.removeEventListener("touchstart", handleTouchStart);
+        mapContainer.removeEventListener("touchend", handleTouchEnd);
+      }
     };
   }, []);
     // Fetch real road route whenever the origin or destination changes
@@ -272,6 +294,7 @@ export default function MiniMap({
       </div>
 
       <div
+        id="minimap-container"
         className="w-full rounded overflow-hidden border border-slate-700 relative"
         style={{ height }}
       >
@@ -279,9 +302,10 @@ export default function MiniMap({
           center={center}
           zoom={11}
           style={{ height: "100%", width: "100%" }}
-          scrollWheelZoom={true}
-          dragging={true}
-          zoomControl={true}
+          scrollWheelZoom={allowMapInteraction}
+          dragging={allowMapInteraction}
+          touchZoom={allowMapInteraction}
+          zoomControl={allowMapInteraction}
         >
           {/* Auto-fit to show both origin and destination */}
           <FitBounds
