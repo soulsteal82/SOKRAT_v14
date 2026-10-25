@@ -100,7 +100,6 @@ export default function MiniMap({
 }: Props) {
   const [mounted, setMounted] = useState(false);
   const [L, setL] = useState<any>(null);
-  const [allowMapInteraction, setAllowMapInteraction] = useState(false);
     const [osrmRoute, setOsrmRoute] = useState<RouteResult | null>(null);
   const [osrmTraffic, setOsrmTraffic] = useState<TrafficSegment[]>([]);
   const [icons, setIcons] = useState<{
@@ -148,44 +147,9 @@ export default function MiniMap({
       window.dispatchEvent(new Event("resize"));
     }, 600);
 
-    // Two-finger detection with scroll prevention
-    const mapContainer = document.getElementById("minimap-container");
-    
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length >= 2) {
-        // Stop the browser from scrolling the page
-        if (e.cancelable) e.preventDefault();
-        setAllowMapInteraction(true);
-      }
-    };
-    
-    const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length >= 2) {
-        // Keep preventing default scroll while two fingers are down
-        if (e.cancelable) e.preventDefault();
-      }
-    };
-
-    const handleTouchEnd = () => {
-      // Lock it again after they lift fingers so page scrolling works
-      setAllowMapInteraction(false);
-    };
-
-    if (mapContainer) {
-      // { passive: false } is REQUIRED to allow e.preventDefault() to block scrolling
-      mapContainer.addEventListener("touchstart", handleTouchStart, { passive: false });
-      mapContainer.addEventListener("touchmove", handleTouchMove, { passive: false });
-      mapContainer.addEventListener("touchend", handleTouchEnd);
-    }
-
     return () => {
       clearTimeout(t1);
       clearTimeout(t2);
-      if (mapContainer) {
-        mapContainer.removeEventListener("touchstart", handleTouchStart);
-        mapContainer.removeEventListener("touchmove", handleTouchMove);
-        mapContainer.removeEventListener("touchend", handleTouchEnd);
-      }
     };
   }, []);
     // Fetch real road route whenever the origin or destination changes
@@ -308,18 +272,16 @@ export default function MiniMap({
       </div>
 
       <div
-        id="minimap-container"
         className="w-full rounded overflow-hidden border border-slate-700 relative"
         style={{ height }}
       >
-        {/* Gesture Hint */}
-        {!allowMapInteraction && (
-          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-[400] bg-slate-900/90 text-slate-300 text-[8px] font-bold uppercase tracking-wider px-2 py-1 rounded-full border border-slate-700 pointer-events-none">
-            👆 Use 2 fingers to move map
-          </div>
-        )}
-        
         <MapContainer
+          center={center}
+          zoom={11}
+          style={{ height: "100%", width: "100%" }}
+          scrollWheelZoom={true}
+          dragging={true}
+          zoomControl={true}
         >
           {/* Auto-fit to show both origin and destination */}
           <FitBounds
