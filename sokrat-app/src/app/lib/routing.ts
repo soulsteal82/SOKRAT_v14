@@ -51,7 +51,7 @@ export async function fetchRoute(
   const url =
     `${OSRM_BASE}/route/v1/driving/` +
     `${from[1]},${from[0]};${to[1]},${to[0]}` +
-    `?overview=full&geometries=geojson&steps=true`;
+    `?overview=full&geometries=geojson&steps=true&alternatives=false&continue_straight=true`;
 
   try {
     const controller = new AbortController();

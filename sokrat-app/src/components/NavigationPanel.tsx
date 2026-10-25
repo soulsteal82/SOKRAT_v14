@@ -225,7 +225,7 @@ export default function NavigationPanel({
         </div>
          <div className="text-right">
           <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold">
-            Traffic (sim.)
+            Traffic
           </div>
           <div
             className={`text-lg font-bold mt-1 ${
@@ -245,7 +245,7 @@ export default function NavigationPanel({
       {!compact && (
         <div className="p-3 space-y-1.5 border-b border-slate-800">
           <div className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mb-1">
-            Traffic ahead (simulated)
+            Traffic ahead
           </div>
           {traffic.map((seg, i) => (
             <div

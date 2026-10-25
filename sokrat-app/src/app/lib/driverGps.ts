@@ -49,13 +49,14 @@ export function startDriverGpsBroadcast(
   // -----------------------------------------------------------
   // Helper: write coordinates to Supabase
   // -----------------------------------------------------------
-  const push = async (lat: number, lng: number) => {
+  const push = async (lat: number, lng: number, heading: number | null = null) => {
     if (stopped) return;
     const { error } = await supabase
       .from("manifests")
       .update({
         driver_current_lat: lat,
         driver_current_lng: lng,
+        driver_heading: heading,
         driver_last_update: new Date().toISOString(),
         driver_status: "IN_TRANSIT",
       })
@@ -115,7 +116,9 @@ export function startDriverGpsBroadcast(
         const now = Date.now();
         if (now - realLastPush < REAL_PUSH_INTERVAL_MS) return;
         realLastPush = now;
-        await push(pos.coords.latitude, pos.coords.longitude);
+        // pos.coords.heading is null if the device is stationary. Keep last known if so.
+        const heading = pos.coords.heading != null ? pos.coords.heading : null;
+        await push(pos.coords.latitude, pos.coords.longitude, heading);
       },
       (err) => {
         console.warn("[driverGps] real GPS error:", err.message);

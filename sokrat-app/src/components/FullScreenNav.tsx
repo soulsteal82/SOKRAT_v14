@@ -134,6 +134,7 @@ export default function FullScreenNav({
   const [traffic, setTraffic] = useState<TrafficSegment[]>([]);
   const [loading, setLoading] = useState(false);
   const [now, setNow] = useState(Date.now());
+  const mapRef = useRef<any>(null); // <-- ADD THIS
 
   // Ticker to update "now" every 5 seconds for GPS staleness check
   useEffect(() => {
@@ -452,13 +453,11 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
       {hasCoords && (
         <button
           onClick={() => {
-            if (driverLat && driverLng) {
-              // We need a ref to the map to recenter it properly.
-              // For now, this button reloads the component which forces a recenter.
-              window.location.reload();
+            if (driverLat && driverLng && mapRef.current) {
+              mapRef.current.setView([driverLat, driverLng], 16, { animate: true });
             }
           }}
-          className="absolute bottom-32 right-3 z-[10002] bg-slate-800 hover:bg-slate-700 text-cyan-400 p-3 rounded-full shadow-2xl border border-slate-700"
+          className="absolute bottom-32 right-3 z-[10002] bg-slate-800 hover:bg-slate-700 text-cyan-400 p-3 rounded-full shadow-2xl border border-slate-700 active:scale-95 transition-transform"
           title="Recenter Map"
         >
           🎯
@@ -502,6 +501,7 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
             scrollWheelZoom={true}
             dragging={true}
             zoomControl={false}
+                        ref={mapRef} // <-- ADD THIS
           >
             {driverLat != null && driverLng != null && (
               <FollowDriver lat={driverLat} lng={driverLng} />
