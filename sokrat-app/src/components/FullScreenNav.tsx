@@ -1,6 +1,5 @@
 "use client";
-
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import dynamic from "next/dynamic";
 
 const MapContainer = dynamic(
@@ -143,13 +142,7 @@ export default function FullScreenNav({
   }, []);
   
   // If no GPS for over 30s, show warning. (Requires passing lastUpdate as a prop)
-  // Rotate the driver arrow based on heading
-  useEffect(() => {
-    const el = document.getElementById("sokrat-driver-arrow");
-    if (el && driverHeading != null) {
-      el.style.transform = `rotate(${driverHeading}deg)`;
-    }
-  }, [driverHeading]);
+  // (Map rotation is handled by the CSS transform on the map container)
 
   // Load leaflet only in the browser
   useEffect(() => {
@@ -176,13 +169,31 @@ export default function FullScreenNav({
     iconsReady = true;
   }, [isOpen]);
 
-  // Fetch the route
+  // Fetch the route, but only recalculate if the driver moved > 50 meters
+  const lastRouteCoords = useRef<[number, number] | null>(null);
+
   useEffect(() => {
     if (!isOpen) return;
     if (driverLat == null || driverLng == null || siteLat == null || siteLng == null)
       return;
+
+    // Check distance moved since last fetch
+    let shouldFetch = false;
+    if (!lastRouteCoords.current) {
+      shouldFetch = true;
+    } else {
+      const dLat = driverLat - lastRouteCoords.current[0];
+      const dLng = driverLng - lastRouteCoords.current[1];
+      const distMeters = Math.sqrt((dLat * 111000) ** 2 + (dLng * 111000) ** 2);
+      if (distMeters > 50) shouldFetch = true; // Recalculate every 50 meters
+    }
+
+    if (!shouldFetch) return;
+
     let cancelled = false;
     setLoading(true);
+    lastRouteCoords.current = [driverLat, driverLng];
+
     fetchRoute([driverLat, driverLng], [siteLat, siteLng])
       .then((r) => {
         if (cancelled) return;
@@ -468,14 +479,21 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
             Loading map…
           </div>
         ) : (
-          <MapContainer
-            center={center}
-            zoom={11}
-            style={{ height: "100%", width: "100%" }}
-            scrollWheelZoom={true}
-            dragging={true}
-            zoomControl={true}
+          <div 
+            className="w-full h-full transition-transform duration-500 ease-in-out origin-center"
+            style={{ 
+              transform: driverHeading != null ? `rotate(${-driverHeading}deg)` : "none",
+              width: "100%", height: "100%" 
+            }}
           >
+            <MapContainer
+              center={center}
+              zoom={17} // Zoom in tighter for driving
+              style={{ height: "100%", width: "100%" }}
+              scrollWheelZoom={true}
+              dragging={true}
+              zoomControl={false} // Hide default zoom buttons
+            >
             {driverLat != null && driverLng != null && (
               <FollowDriver lat={driverLat} lng={driverLng} />
             )}
@@ -520,6 +538,7 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
               <Marker position={[siteLat!, siteLng!]} icon={icons.siteIcon} />
             )}
           </MapContainer>
+               </div>
         )}
 
         {/* Floating ETA badge */}
@@ -614,8 +633,7 @@ const { supabaseBrowser: supabase } = await import("@/app/lib/supabase-browser")
 function rebuildIcons(leaflet: any) {
   const driverIcon = leaflet.divIcon({
     className: "custom-driver-marker",
-    html: `<div id="sokrat-driver-arrow" style="background:#06b6d4;width:36px;height:36px;border-radius:50%;border:3px solid white;box-shadow:0 0 16px rgba(6,182,212,1);display:flex;align-items:center;justify-content:center;font-size:20px;transition:transform 0.5s ease-in-out;">⬆️</div>`,
-    iconSize: [36, 36],
+    html: `<div id="sokrat-driver-arrow" style="background:#06b6d4;width:36px;height:36px;border-radius:50%;border:3px solid white;box-shadow:0 0 16px rgba(6,182,212,1);display:flex;align-items:center;justify-content:center;font-size:20px;">⬆️</div>`,    iconSize: [36, 36],
     iconAnchor: [18, 18],
   });
   const siteIcon = leaflet.divIcon({
